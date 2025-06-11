@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎙️ Conversational Historical Figures Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+            overflow-x: hidden;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            animation: slideInDown 0.8s ease-out;
+        }
+        .title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        .conversation-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin: 20px 0;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            animation: slideInUp 0.8s ease-out;
+            transition: all 0.3s ease;
+        }
+
+        /* Conversation States */
+        .conversation-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+        }
+        .state-speaking {
+            background: rgba(76, 175, 80, 0.2);
+            border: 2px solid rgba(76, 175, 80, 0.5);
+            animation: speakingPulse 2s infinite;
+        }
+        .state-listening {
+            background: rgba(33, 150, 243, 0.2);
+            border: 2px solid rgba(33, 150, 243, 0.5);
+            animation: listeningPulse 1.5s infinite;
+        }
+        .state-processing {
+            background: rgba(156, 39, 176, 0.2);
+            border: 2px solid rgba(156, 39, 176, 0.5);
+            animation: processingPulse 1s infinite;
+        }
+        .state-waiting {
+            background: rgba(255, 193, 7, 0.2);
+            border: 2px solid rgba(255, 193, 7, 0.5);
+            animation: waitingPulse 2.5s infinite;
+        }
+
+        @keyframes speakingPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+        }
+        @keyframes listeningPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        @keyframes processingPulse {
+            0%, 100% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes waitingPulse {
+            0%, 100% { opacity: 1; }
+            25%, 75% { opacity: 0.6; }
+        }
+
+        /* Voice Visualizer */
+        .voice-visualizer {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            height: 80px;
+            margin: 20px 0;
+            gap: 3px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.1);
+            padding: 10px;
+        }
+        .voice-bar {
+            width: 6px;
+            background: linear-gradient(to top, #4CAF50, #81C784);
+            border-radius: 3px;
+            transition: height 0.1s ease;
+            min-height: 4px;
+        }
+        .voice-bar.active {
+            background: linear-gradient(to top, #FF6B6B, #FF8E53);
+            animation: voiceWave 0.3s ease-in-out infinite alternate;
+        }
+        @keyframes voiceWave {
+            0% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        /* Progress and Score */
+        .progress-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .progress-bar {
+            flex: 1;
+            height: 12px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 6px;
+            overflow: hidden;
+            min-width: 200px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            border-radius: 6px;
+            transition: width 0.8s ease;
+        }
+        .score-display {
+            font-size: 1.3rem;
+            font-weight: bold;
+            text-align: right;
+        }
+
+        /* Figure Description */
+        .figure-description {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            border-left: 4px solid #FFD700;
+        }
+
+        /* Conversation Controls */
+        .conversation-controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .conv-button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            font-weight: bold;
+        }
+        .conv-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        .conv-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .conv-button.primary {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+        }
+        .conv-button.secondary {
+            background: linear-gradient(135deg, #FF9800, #F57C00);
+        }
+        .conv-button.danger {
+            background: linear-gradient(135deg, #F44336, #D32F2F);
+        }
+
+        /* Speaking Indicator */
+        .speaking-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        .speaking-icon {
+            animation: speakingIcon 1s infinite;
+            margin-right: 10px;
+        }
+        @keyframes speakingIcon {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+
+        /* Results Display */
+        .conversation-result {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 15px 0;
+            animation: slideInUp 0.6s ease-out;
+        }
+        .result-score {
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .result-feedback {
+            font-style: italic;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        /* Error Messages */
+        .error-message {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid rgba(244, 67, 54, 0.5);
+            color: #ff6b6b;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            text-align: center;
+            animation: shake 0.5s ease-in-out;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        /* Permission Request */
+        .permission-request {
+            text-align: center;
+            padding: 30px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+
+        /* Mode Toggle */
+        .mode-toggle {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .mode-button {
+            padding: 10px 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .mode-button.active {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+
+        @keyframes slideInDown {
+            from { opacity: 0; transform: translateY(-50px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideInUp {
+            from { opacity: 0; transform: translateY(50px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 15px; }
+            .title { font-size: 2rem; }
+            .conversation-card { padding: 20px; }
+            .conversation-controls { flex-direction: column; }
+            .conv-button { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">🎙️ Conversational History Game</h1>
+            <p class="subtitle">Speak naturally with your AI tutor about historical figures!</p>
+        </div>
+
+        <div class="mode-toggle">
+            <button class="mode-button" id="manualMode" onclick="setMode('manual')">Manual Mode</button>
+            <button class="mode-button active" id="conversationalMode" onclick="setMode('conversational')">Conversational Mode</button>
+        </div>
+
+        <div id="gameContainer">
+            <div class="conversation-card">
+                <div class="permission-request">
+                    <h3>🎤 Microphone Permission Required</h3>
+                    <p>This conversational mode needs microphone access to hear your responses.</p>
+                    <button class="conv-button primary" onclick="game.requestPermissions()">Grant Permission & Start</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ConversationalHistoryGame {
+            constructor() {
+                this.gameMode = 'conversational';
+                this.conversationState = 'idle';
+                this.gameState = null;
+                this.mediaRecorder = null;
+                this.audioContext = null;
+                this.analyser = null;
+                this.isRecording = false;
+                this.speechSynthesis = null;
+                this.vadConfig = null;
+                this.permissionsGranted = false;
+
+                // Voice Activity Detection
+                this.isListening = false;
+                this.speechDetected = false;
+                this.silenceStartTime = null;
+                this.speechStartTime = null;
+                this.audioLevelHistory = [];
+
+                // TTS Management
+                this.currentUtterance = null;
+                this.speechQueue = [];
+
+                this.init();
+            }
+
+            async init() {
+                this.setupSpeechSynthesis();
+                this.checkBrowserSupport();
+            }
+
+            checkBrowserSupport() {
+                const errors = [];
+
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    errors.push("Microphone access not supported");
+                }
+
+                if (!window.SpeechSynthesisUtterance) {
+                    errors.push("Text-to-speech not supported");
+                }
+
+                if (!window.AudioContext && !window.webkitAudioContext) {
+                    errors.push("Web Audio API not supported");
+                }
+
+                if (errors.length > 0) {
+                    this.showError("Browser not supported: " + errors.join(", "));
+                    return false;
+                }
+
+                return true;
+            }
+
+            setupSpeechSynthesis() {
+                this.speechSynthesis = window.speechSynthesis;
+
+                // Wait for voices to load
+                if (this.speechSynthesis.getVoices().length === 0) {
+                    this.speechSynthesis.addEventListener('voiceschanged', () => {
+                        console.log('🔊 Voices loaded:', this.speechSynthesis.getVoices().length);
+                    });
+                }
+            }
+
+            async requestPermissions() {
+                try {
+                    console.log('🎤 Requesting microphone permission...');
+
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        }
+                    });
+
+                    // Test successful - stop the stream
+                    stream.getTracks().forEach(track => track.stop());
+
+                    this.permissionsGranted = true;
+                    console.log('✅ Microphone permission granted');
+
+                    await this.startGame();
+
+                } catch (error) {
+                    console.error('❌ Microphone permission denied:', error);
+                    this.showError('Microphone permission is required for conversational mode. Please grant permission and try again.');
+                }
+            }
+
+            async startGame() {
+                try {
+                    console.log('🎮 Starting conversational game...');
+
+                    // Load game state
+                    await this.loadGameState();
+
+                    // Get VAD configuration
+                    await this.loadVADConfig();
+
+                    // Render conversation interface
+                    this.renderConversationInterface();
+
+                    // Start the conversation
+                    await this.startConversation();
+
+                } catch (error) {
+                    console.error('Error starting game:', error);
+                    this.showError('Failed to start game: ' + error.message);
+                }
+            }
+
+            async loadGameState() {
+                const response = await fetch('/api/game-state');
+                if (!response.ok) throw new Error('Failed to load game state');
+                this.gameState = await response.json();
+                console.log('📊 Game state loaded:', this.gameState);
+            }
+
+            async loadVADConfig() {
+                try {
+                    const response = await fetch('/api/conversation/voice-activity-config');
+                    if (!response.ok) throw new Error('Failed to load VAD config');
+                    const data = await response.json();
+                    this.vadConfig = data.vad_config;
+                    console.log('🎙️ VAD config loaded successfully:', this.vadConfig);
+
+                    // Use simple fallback if config missing
+                    if (!this.vadConfig || !this.vadConfig.timing) {
+                        console.warn('⚠️ Invalid VAD config, using defaults');
+                        this.vadConfig = {
+                            timing: {
+                                silence_duration_ms: 2000,
+                                max_recording_duration_ms: 30000
+                            }
+                        };
+                    }
+                } catch (error) {
+                    console.error('❌ Failed to load VAD config:', error);
+                    // Use fallback config
+                    this.vadConfig = {
+                        timing: {
+                            silence_duration_ms: 2000,
+                            max_recording_duration_ms: 30000
+                        }
+                    };
+                    console.log('🔧 Using fallback VAD config:', this.vadConfig);
+                }
+            }
+
+            renderConversationInterface() {
+                const container = document.getElementById('gameContainer');
+
+                if (this.gameState.is_complete) {
+                    this.renderGameComplete();
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="conversation-card">
+                        <div class="progress-section">
+                            <div style="flex: 1;">
+                                <div>Progress: ${this.gameState.progress.current}/${this.gameState.progress.total}</div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${(this.gameState.progress.current / this.gameState.progress.total) * 100}%"></div>
+                                </div>
+                            </div>
+                            <div class="score-display">
+                                Score: ${Math.round(this.gameState.score)}
+                                ${this.gameState.streak > 1 ? `<br>🔥 ${this.gameState.streak} streak!` : ''}
+                            </div>
+                        </div>
+
+                        <div class="conversation-state" id="conversationState">
+                            🤖 Preparing conversation...
+                        </div>
+
+                        <div class="figure-description" id="figureDescription" style="display: none;">
+                            <div id="descriptionText"></div>
+                        </div>
+
+                        <div class="voice-visualizer" id="voiceVisualizer">
+                            ${Array(25).fill(0).map(() => '<div class="voice-bar"></div>').join('')}
+                        </div>
+
+                        <div id="debugPanel" style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; font-family: monospace; font-size: 0.8rem; margin: 10px 0; display: none;">
+                            <div>Audio Level: <span id="audioLevelDebug">0.000</span></div>
+                            <div>Speech Threshold: <span id="thresholdDebug">0.150</span></div>
+                            <div>Speech Detected: <span id="speechDebug">false</span></div>
+                            <div>Silence Duration: <span id="silenceDebug">0ms</span></div>
+                            <div>Recording State: <span id="recordingStateDebug">inactive</span></div>
+                            <div>Audio Chunks: <span id="audioChunksDebug">0</span></div>
+                            <div>Is Listening: <span id="isListeningDebug">false</span></div>
+                            <div style="margin-top: 5px; font-size: 0.7rem; color: #ccc;">
+                                Time domain analysis | Speak loudly and clearly
+                            </div>
+                        </div>
+
+                        <div style="text-align: center; margin: 10px 0;">
+                            <button class="conv-button" onclick="game.toggleDebug()" style="font-size: 0.8rem; padding: 8px 16px;">
+                                🔍 Toggle Debug
+                            </button>
+                            <button class="conv-button" onclick="game.forceStartListening()" style="font-size: 0.8rem; padding: 8px 16px; margin-left: 10px;">
+                                🎤 Force Listen
+                            </button>
+                        </div>
+
+                        <div class="conversation-controls">
+                            <button class="conv-button danger" onclick="game.pauseConversation()" id="pauseBtn">
+                                ⏸️ Pause
+                            </button>
+                            <button class="conv-button danger" onclick="game.exitConversation()" id="exitBtn">
+                                🚪 Exit
+                            </button>
+                            <button class="conv-button" onclick="game.stopRecording()" id="stopRecordingBtn" style="display: none;">
+                                🛑 Stop Recording
+                            </button>
+                            <button class="conv-button secondary" onclick="game.repeatQuestion()" id="repeatBtn" disabled>
+                                🔄 Repeat Question
+                            </button>
+                            <button class="conv-button" onclick="game.getHint()" id="hintBtn" disabled>
+                                💡 Hint
+                            </button>
+                            <button class="conv-button danger" onclick="game.skipQuestion()" id="skipBtn" disabled>
+                                ⏭️ Skip
+                            </button>
+                            <button class="conv-button primary" onclick="game.restartGame()" id="restartBtn">
+                                🎮 Restart
+                            </button>
+                        </div>
+
+                        <div id="conversationResult" style="display: none;"></div>
+                    </div>
+                `;
+            }
+
+            async startConversation() {
+                try {
+                    console.log('🗣️ Starting conversation for current figure...');
+
+                    const response = await fetch('/api/conversation/start', { method: 'POST' });
+                    if (!response.ok) throw new Error('Failed to start conversation');
+
+                    const result = await response.json();
+                    console.log('✅ Conversation started:', result);
+
+                    // The backend has started the conversation
+                    // Now we need to speak the question
+                    await this.speakQuestion();
+
+                } catch (error) {
+                    console.error('Error starting conversation:', error);
+                    this.showError('Failed to start conversation: ' + error.message);
+                }
+            }
+
+            async speakQuestion() {
+                const figure = this.gameState.current_figure;
+                const questionText = `Here's your question: ${figure.description}. Who am I describing?`;
+
+                this.updateConversationState('speaking', '🤖 Speaking question...');
+
+                await this.speak(questionText, () => {
+                    // After question is spoken, start listening
+                    this.startListening();
+                });
+            }
+
+            speak(text, onComplete = null) {
+                return new Promise((resolve) => {
+                    // Stop any current speech
+                    this.speechSynthesis.cancel();
+
+                    const utterance = new SpeechSynthesisUtterance(text);
+
+                    // Configure voice settings
+                    const voices = this.speechSynthesis.getVoices();
+                    const preferredVoice = voices.find(voice =>
+                        voice.lang.includes('en') &&
+                        (voice.name.includes('Female') || voice.name.includes('female'))
+                    ) || voices.find(voice => voice.lang.includes('en')) || voices[0];
+
+                    if (preferredVoice) {
+                        utterance.voice = preferredVoice;
+                    }
+
+                    utterance.rate = 0.9;
+                    utterance.pitch = 1.0;
+                    utterance.volume = 0.8;
+
+                    utterance.onend = () => {
+                        console.log('🔊 Speech synthesis complete');
+                        if (onComplete) onComplete();
+                        resolve();
+                    };
+
+                    utterance.onerror = (error) => {
+                        console.error('🔊 Speech synthesis error:', error);
+                        if (onComplete) onComplete();
+                        resolve();
+                    };
+
+                    this.currentUtterance = utterance;
+                    this.speechSynthesis.speak(utterance);
+
+                    console.log('🔊 Speaking:', text.substring(0, 50) + '...');
+                });
+            }
+
+            async startListening() {
+                if (!this.permissionsGranted) {
+                    await this.requestPermissions();
+                    return;
+                }
+
+                try {
+                    console.log('👂 Starting to listen...');
+
+                    this.updateConversationState('listening', '👂 Listening for your answer...');
+                    this.enableControls(['repeatBtn', 'hintBtn', 'skipBtn', 'stopRecordingBtn']);
+
+                    // Show the manual stop button
+                    const stopBtn = document.getElementById('stopRecordingBtn');
+                    if (stopBtn) stopBtn.style.display = 'inline-block';
+
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                            sampleRate: 16000
+                        }
+                    });
+
+                    this.setupAudioAnalysis(stream);
+                    this.setupRecording(stream);
+
+                    // START RECORDING IMMEDIATELY - don't wait for speech detection
+                    console.log('📹 Starting MediaRecorder immediately...');
+                    try {
+                        this.mediaRecorder.start(100);
+                        this.isRecording = true;
+                        console.log('✅ MediaRecorder started successfully');
+                    } catch (error) {
+                        console.error('❌ Failed to start MediaRecorder:', error);
+                        throw error;
+                    }
+
+                    this.isListening = true;
+                    this.speechDetected = false;
+                    this.silenceStartTime = null;
+                    this.speechStartTime = null;
+
+                    console.log('✅ Listening started successfully');
+
+                } catch (error) {
+                    console.error('Error starting to listen:', error);
+                    this.showError('Failed to access microphone: ' + error.message);
+                }
+            }
+
+            stopRecording() {
+                console.log('🛑 Manual stop recording requested');
+                this.stopListening();
+            }
+
+            setupAudioAnalysis(stream) {
+                try {
+                    console.log('🔊 Setting up audio analysis...');
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    this.analyser = this.audioContext.createAnalyser();
+
+                    const source = this.audioContext.createMediaStreamSource(stream);
+                    source.connect(this.analyser);
+
+                    // Use time domain data instead of frequency for better voice detection
+                    this.analyser.fftSize = 512;
+                    this.analyser.smoothingTimeConstant = 0.8;
+
+                    const bufferLength = this.analyser.fftSize;
+                    this.dataArray = new Uint8Array(bufferLength);        // For visualizer
+                    this.timeDataArray = new Uint8Array(bufferLength);    // For voice detection
+
+                    console.log('✅ Audio analysis setup complete. FFT Size:', this.analyser.fftSize, 'Buffer Length:', bufferLength);
+
+                    // Start the analysis loop
+                    this.analyzeAudio();
+
+                } catch (error) {
+                    console.error('❌ Error setting up audio analysis:', error);
+                    this.showError('Failed to setup audio analysis: ' + error.message);
+                }
+            }
+
+            setupRecording(stream) {
+                try {
+                    console.log('🎬 Setting up MediaRecorder...');
+
+                    // Try WAV first (no conversion needed), then WebM fallbacks
+                    const options = { mimeType: 'audio/wav' };
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        console.log('⚠️ WAV not supported, trying webm...');
+                        options.mimeType = 'audio/webm;codecs=opus';
+                        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                            console.log('⚠️ Opus not supported, trying webm...');
+                            options.mimeType = 'audio/webm';
+                            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                                console.log('⚠️ WebM not supported, trying mp4...');
+                                options.mimeType = 'audio/mp4';
+                                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                                    console.log('⚠️ MP4 not supported, using default...');
+                                    delete options.mimeType;
+                                }
+                            }
+                        }
+                    }
+
+                    console.log('🎯 Using MIME type:', options.mimeType || 'default');
+
+                    this.mediaRecorder = new MediaRecorder(stream, options);
+                    this.audioChunks = [];
+                    this.currentMimeType = options.mimeType || 'audio/webm';
+
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            this.audioChunks.push(event.data);
+                            console.log('📦 Audio chunk received:', event.data.size, 'bytes, total chunks:', this.audioChunks.length);
+                        }
+                    };
+
+                    this.mediaRecorder.onstop = () => {
+                        console.log('📹 MediaRecorder stopped, processing audio...');
+                        this.processRecording();
+                    };
+
+                    this.mediaRecorder.onerror = (event) => {
+                        console.error('❌ MediaRecorder error:', event.error);
+                        this.showError('Recording error: ' + event.error);
+                    };
+
+                    this.mediaRecorder.onstart = () => {
+                        console.log('▶️ MediaRecorder started successfully');
+                    };
+
+                    console.log('✅ MediaRecorder setup complete');
+
+                } catch (error) {
+                    console.error('❌ Error setting up MediaRecorder:', error);
+                    throw error;
+                }
+            }
+
+            analyzeAudio() {
+                if (!this.isListening || !this.analyser) {
+                    // If we're not listening anymore, stop the analysis loop
+                    return;
+                }
+
+                // Continue the analysis loop
+                requestAnimationFrame(() => this.analyzeAudio());
+
+                // Get both frequency data (for visualizer) and time data (for voice detection)
+                this.analyser.getByteFrequencyData(this.dataArray);
+                this.analyser.getByteTimeDomainData(this.timeDataArray);
+
+                // Calculate audio level using time domain data (much better for speech)
+                let sum = 0;
+                for (let i = 0; i < this.timeDataArray.length; i++) {
+                    const amplitude = Math.abs(this.timeDataArray[i] - 128); // Center around 0
+                    sum += amplitude;
+                }
+                const audioLevel = sum / this.timeDataArray.length / 128; // Normalize to 0-1
+
+                // Update visualizer with frequency data
+                this.updateVoiceVisualizer(this.dataArray);
+
+                // Voice Activity Detection with time domain data
+                this.processVoiceActivity(audioLevel);
+            }
+
+            processVoiceActivity(audioLevel) {
+                // More reasonable threshold for time domain data
+                const speechThreshold = 0.15;  // Higher threshold for time domain
+                const silenceDuration = this.vadConfig?.timing?.silence_duration_ms || 2000;
+                const maxDuration = this.vadConfig?.timing?.max_recording_duration_ms || 30000;
+
+                const isSpeech = audioLevel > speechThreshold;
+                const now = Date.now();
+
+                // Update debug panel
+                this.updateDebugPanel(audioLevel, speechThreshold, isSpeech);
+
+                // Debug logging every 50 frames (less spam)
+                if (Math.random() < 0.02) {
+                    console.log(`🎙️ VAD: Level=${audioLevel.toFixed(3)}, Threshold=${speechThreshold}, Speech=${isSpeech}, SpeechDetected=${this.speechDetected}, Recording=${this.isRecording}`);
+                }
+
+                if (isSpeech) {
+                    if (!this.speechDetected) {
+                        // Speech just started
+                        console.log('🗣️ SPEECH STARTED! Audio level:', audioLevel.toFixed(3));
+                        this.speechDetected = true;
+                        this.speechStartTime = now;
+                        this.silenceStartTime = null;
+
+                        this.updateConversationState('listening', '🗣️ Recording your answer...');
+                    } else {
+                        // Speech continuing - reset silence timer
+                        if (this.silenceStartTime) {
+                            console.log('🔄 Speech resumed, resetting silence timer');
+                            this.silenceStartTime = null;
+                        }
+                    }
+                } else {
+                    // No speech detected
+                    if (this.speechDetected) {
+                        // We had speech before, now it's quiet
+                        if (!this.silenceStartTime) {
+                            // Just went silent
+                            this.silenceStartTime = now;
+                            console.log('🤫 SILENCE STARTED. Will stop in', silenceDuration, 'ms');
+                        } else {
+                            // Check if we've been silent long enough
+                            const silenceDurationMs = now - this.silenceStartTime;
+
+                            if (silenceDurationMs > silenceDuration) {
+                                console.log('🛑 SUFFICIENT SILENCE DETECTED! Duration:', silenceDurationMs, 'ms');
+                                this.stopListening();
+                                return; // Exit early
+                            }
+
+                            // Show countdown occasionally
+                            if (Math.random() < 0.05) {
+                                const remaining = Math.max(0, silenceDuration - silenceDurationMs);
+                                console.log(`⏳ Silence: ${silenceDurationMs}ms / ${silenceDuration}ms (${remaining}ms remaining)`);
+                            }
+                        }
+                    } else {
+                        // No speech detected yet, still waiting for user to start talking
+                        if (Math.random() < 0.01) { // Very occasional logging
+                            console.log(`👂 Waiting for speech... Current level: ${audioLevel.toFixed(3)} (need > ${speechThreshold})`);
+                        }
+                    }
+                }
+
+                // Safety timeout check
+                if (this.isRecording) {
+                    const recordingDuration = now - (this.speechStartTime || now - 5000); // Fallback if no speech start time
+                    if (recordingDuration > maxDuration) {
+                        console.log('⏰ MAXIMUM RECORDING TIME REACHED:', recordingDuration, 'ms');
+                        this.stopListening();
+                    }
+                }
+            }
+
+            updateDebugPanel(audioLevel, threshold, isSpeech) {
+                const debugPanel = document.getElementById('debugPanel');
+                if (!debugPanel || debugPanel.style.display === 'none') return;
+
+                const now = Date.now();
+                const silenceDurationMs = this.silenceStartTime ? now - this.silenceStartTime : 0;
+
+                document.getElementById('audioLevelDebug').textContent = audioLevel.toFixed(3);
+                document.getElementById('thresholdDebug').textContent = threshold.toFixed(3);
+                document.getElementById('speechDebug').textContent = isSpeech.toString();
+                document.getElementById('silenceDebug').textContent = silenceDurationMs + 'ms';
+                document.getElementById('recordingStateDebug').textContent = this.mediaRecorder ? this.mediaRecorder.state : 'none';
+                document.getElementById('audioChunksDebug').textContent = this.audioChunks ? this.audioChunks.length : 0;
+                document.getElementById('isListeningDebug').textContent = this.isListening.toString();
+            }
+
+            toggleDebug() {
+                const debugPanel = document.getElementById('debugPanel');
+                if (debugPanel) {
+                    debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
+                }
+            }
+
+            pauseConversation() {
+                console.log('⏸️ Pausing conversation...');
+
+                // Stop any current speech
+                if (this.speechSynthesis) {
+                    this.speechSynthesis.cancel();
+                }
+
+                // Stop listening
+                if (this.isListening) {
+                    this.stopListening();
+                }
+
+                this.updateConversationState('idle', '⏸️ Conversation paused');
+
+                // Show resume button
+                const controls = document.querySelector('.conversation-controls');
+                const resumeBtn = document.getElementById('resumeBtn');
+                if (!resumeBtn) {
+                    const resumeButton = document.createElement('button');
+                    resumeButton.className = 'conv-button primary';
+                    resumeButton.id = 'resumeBtn';
+                    resumeButton.onclick = () => this.resumeConversation();
+                    resumeButton.innerHTML = '▶️ Resume';
+                    controls.prepend(resumeButton);
+                }
+
+                // Disable other controls
+                this.disableControls(['repeatBtn', 'hintBtn', 'skipBtn', 'stopRecordingBtn']);
+            }
+
+            resumeConversation() {
+                console.log('▶️ Resuming conversation...');
+
+                // Remove resume button
+                const resumeBtn = document.getElementById('resumeBtn');
+                if (resumeBtn) {
+                    resumeBtn.remove();
+                }
+
+                // Re-enable controls
+                this.enableControls(['repeatBtn', 'hintBtn', 'skipBtn']);
+
+                // Restart listening
+                this.startListening();
+            }
+
+            exitConversation() {
+                console.log('🚪 Exiting conversation...');
+
+                if (confirm('Are you sure you want to exit the conversation?')) {
+                    // Stop everything
+                    if (this.speechSynthesis) {
+                        this.speechSynthesis.cancel();
+                    }
+
+                    if (this.isListening) {
+                        this.stopListening();
+                    }
+
+                    // Go back to manual mode
+                    window.location.href = '/';
+                }
+            }
+
+            forceStartListening() {
+                console.log('🔧 Force starting listening (debug)...');
+                this.startListening();
+            }
+
+            stopListening() {
+                if (!this.isListening) {
+                    console.log('⚠️ stopListening called but not currently listening');
+                    return;
+                }
+
+                console.log('🛑 Stopping listening...');
+
+                this.isListening = false;
+
+                // Hide the manual stop button
+                const stopBtn = document.getElementById('stopRecordingBtn');
+                if (stopBtn) stopBtn.style.display = 'none';
+
+                if (this.isRecording && this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                    console.log('📹 Stopping MediaRecorder...');
+                    this.mediaRecorder.stop();
+                    this.isRecording = false;
+                } else {
+                    console.log('⚠️ MediaRecorder not recording, state:', this.mediaRecorder?.state);
+                }
+
+                // Stop audio stream
+                if (this.mediaRecorder && this.mediaRecorder.stream) {
+                    this.mediaRecorder.stream.getTracks().forEach(track => {
+                        console.log('🔇 Stopping audio track');
+                        track.stop();
+                    });
+                }
+
+                this.updateConversationState('processing', '🧠 Processing your answer...');
+                this.disableControls(['repeatBtn', 'hintBtn', 'skipBtn', 'stopRecordingBtn']);
+            }
+
+            async processRecording() {
+                try {
+                    console.log('🎬 Processing recording... Audio chunks:', this.audioChunks.length);
+                    console.log('🎯 Current MIME type:', this.currentMimeType);
+
+                    if (this.audioChunks.length === 0) {
+                        console.error('❌ No audio chunks recorded!');
+                        this.showError('No audio was recorded. Please try speaking louder or check your microphone.');
+                        return;
+                    }
+
+                    const audioBlob = new Blob(this.audioChunks, { type: this.currentMimeType });
+                    console.log('📦 Audio blob created:', audioBlob.size, 'bytes, type:', this.currentMimeType);
+
+                    if (audioBlob.size < 1000) {
+                        console.error('❌ Audio recording too short:', audioBlob.size, 'bytes');
+                        this.showError('Recording too short. Please try speaking for longer.');
+
+                        // Restart listening after error
+                        setTimeout(() => {
+                            this.startListening();
+                        }, 2000);
+                        return;
+                    }
+
+                    const formData = new FormData();
+
+                    // Use appropriate file extension based on MIME type
+                    let fileName = 'recording.webm'; // default
+                    if (this.currentMimeType.includes('wav')) {
+                        fileName = 'recording.wav';
+                    } else if (this.currentMimeType.includes('mp4')) {
+                        fileName = 'recording.mp4';
+                    }
+
+                    formData.append('audio', audioBlob, fileName);
+
+                    console.log('📤 Submitting audio to server as:', fileName);
+
+                    const response = await fetch('/api/conversation/submit-answer', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Server error');
+                    }
+
+                    const result = await response.json();
+                    console.log('✅ Answer processed successfully:', result);
+
+                    // Show result and speak feedback
+                    await this.showResult(result);
+
+                } catch (error) {
+                    console.error('❌ Error processing recording:', error);
+                    this.showError('Error processing your answer: ' + error.message);
+
+                    // Restart listening after error
+                    setTimeout(() => {
+                        this.startListening();
+                    }, 2000);
+                }
+            }
+
+            async showResult(result) {
+                const resultDiv = document.getElementById('conversationResult');
+                const analysis = result.analysis || {};
+
+                resultDiv.innerHTML = `
+                    <div class="conversation-result">
+                        <div class="result-score">Score: ${Math.round(analysis.overall_score || 0)}/100</div>
+                        <div class="result-feedback">"${result.transcription || 'No speech detected'}"</div>
+                        <div><strong>Correct answer:</strong> ${result.figure_name}</div>
+                    </div>
+                `;
+                resultDiv.style.display = 'block';
+
+                // Speak the feedback (simulated - would come from backend)
+                const feedbackText = this.generateFeedback(result);
+
+                this.updateConversationState('speaking', '🤖 Providing feedback...');
+
+                await this.speak(feedbackText, () => {
+                    // After feedback, wait for "next" command
+                    this.waitForNext(result);
+                });
+            }
+
+            generateFeedback(result) {
+                const accuracy = result.analysis?.accuracy_score || 0;
+                const transcription = result.transcription || '';
+                const figureName = result.figure_name || 'the figure';
+
+                if (accuracy >= 90) {
+                    return `Perfect! You said "${transcription}" and that's exactly right. Great job!`;
+                } else if (accuracy >= 70) {
+                    return `Correct! You said "${transcription}" - that's ${figureName}. Well done!`;
+                } else if (accuracy >= 40) {
+                    return `Close! You said "${transcription}" - I was looking for ${figureName}.`;
+                } else {
+                    return `Not quite. You said "${transcription}", but the answer was ${figureName}. Keep trying!`;
+                }
+            }
+
+            waitForNext(result) {
+                this.updateConversationState('waiting', '⏳ Say "next" to continue...');
+
+                if (result.is_final_figure) {
+                    this.speak('Congratulations! You\'ve completed all the figures! Say "next" to see your final results.');
+                } else {
+                    this.speak('Say "next" when you\'re ready for the next question.');
+                }
+
+                // DON'T automatically start listening for commands
+                // Instead, show manual next button as fallback
+                setTimeout(() => {
+                    this.showManualNext();
+                }, 3000); // Show manual button after 3 seconds
+            }
+
+            showManualNext() {
+                const controls = document.querySelector('.conversation-controls');
+
+                // Check if next button already exists
+                if (document.getElementById('nextQuestionBtn')) return;
+
+                const nextButton = document.createElement('button');
+                nextButton.className = 'conv-button primary';
+                nextButton.id = 'nextQuestionBtn';
+                nextButton.onclick = () => this.nextQuestion();
+                nextButton.innerHTML = '➡️ Next Question';
+                nextButton.style.marginLeft = '10px';
+
+                controls.appendChild(nextButton);
+            }
+
+            // Removed listenForCommand function that was causing auto-advance issues
+
+            // Removed old showManualNext function references
+
+            async nextQuestion() {
+                // Remove the next button
+                const nextBtn = document.getElementById('nextQuestionBtn');
+                if (nextBtn) {
+                    nextBtn.remove();
+                }
+
+                // Load new game state
+                await this.loadGameState();
+
+                if (this.gameState.is_complete) {
+                    this.renderGameComplete();
+                } else {
+                    this.renderConversationInterface();
+                    await this.startConversation();
+                }
+            }
+
+            updateConversationState(state, text) {
+                const stateElement = document.getElementById('conversationState');
+                if (stateElement) {
+                    stateElement.className = `conversation-state state-${state}`;
+                    stateElement.textContent = text;
+                }
+                this.conversationState = state;
+            }
+
+            updateVoiceVisualizer(frequencyData) {
+                const bars = document.querySelectorAll('.voice-bar');
+                const step = Math.floor(frequencyData.length / bars.length);
+
+                bars.forEach((bar, index) => {
+                    const value = frequencyData[index * step] || 0;
+                    const height = (value / 255) * 100;
+                    bar.style.height = `${Math.max(4, height)}%`;
+                    bar.classList.toggle('active', value > 30);
+                });
+            }
+
+            enableControls(controlIds) {
+                controlIds.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) element.disabled = false;
+                });
+            }
+
+            disableControls(controlIds) {
+                controlIds.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) element.disabled = true;
+                });
+            }
+
+            async repeatQuestion() {
+                await this.speakQuestion();
+            }
+
+            async getHint() {
+                const figure = this.gameState.current_figure;
+                const hintText = `Here's a hint: ${figure.hint}`;
+                await this.speak(hintText);
+            }
+
+            async skipQuestion() {
+                const figure = this.gameState.current_figure;
+                const skipText = `No problem! The answer was ${figure.name}.`;
+                await this.speak(skipText, () => {
+                    this.waitForNext({ is_final_figure: false });
+                });
+            }
+
+            async restartGame() {
+                try {
+                    const response = await fetch('/api/restart-game', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mode: 'classic' })
+                    });
+
+                    if (response.ok) {
+                        location.reload();
+                    }
+                } catch (error) {
+                    console.error('Error restarting game:', error);
+                }
+            }
+
+            renderGameComplete() {
+                const container = document.getElementById('gameContainer');
+                container.innerHTML = `
+                    <div class="conversation-card">
+                        <h2 style="text-align: center; margin-bottom: 20px;">🎉 Congratulations!</h2>
+                        <p style="text-align: center; font-size: 1.2rem;">You've completed all the historical figures!</p>
+                        <div style="text-align: center; margin-top: 30px;">
+                            <button class="conv-button primary" onclick="game.restartGame()">
+                                🎮 Start New Game
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            showError(message) {
+                const container = document.getElementById('gameContainer');
+                container.innerHTML = `
+                    <div class="conversation-card">
+                        <div class="error-message">${message}</div>
+                        <div style="text-align: center; margin-top: 20px;">
+                            <button class="conv-button primary" onclick="location.reload()">🔄 Retry</button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Global functions
+        let game;
+
+        function setMode(mode) {
+            document.getElementById('manualMode').classList.toggle('active', mode === 'manual');
+            document.getElementById('conversationalMode').classList.toggle('active', mode === 'conversational');
+
+            if (mode === 'manual') {
+                // Switch to original manual mode
+                window.location.href = '/';
+            } else {
+                // Stay in conversational mode
+                if (!game) {
+                    game = new ConversationalHistoryGame();
+                }
+            }
+        }
+
+        // Initialize conversational game
+        window.addEventListener('load', () => {
+            game = new ConversationalHistoryGame();
+        });
+    </script>
+</body>
+</html>

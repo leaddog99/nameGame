@@ -1,0 +1,22 @@
+# Flask and web framework dependencies
+Flask==2.3.3
+Flask-CORS==4.0.0
+Werkzeug==2.3.7
+
+# Local Whisper dependencies (NO API COSTS!)
+openai-whisper==20231117
+torch>=1.9.0
+torchaudio>=0.9.0
+
+# Audio processing
+pydub==0.25.1
+librosa==0.10.1
+numpy>=1.21.0
+scipy>=1.7.0
+
+# Optional: For GPU acceleration (much faster, but not required)
+# Uncomment the line below if you have an NVIDIA GPU:
+# torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# Note: You may also need ffmpeg for audio conversion
+# Install with: sudo apt-get install ffmpeg (Linux) or brew install ffmpeg (Mac)

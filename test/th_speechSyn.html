@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔊 AI Speech Test Harness</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .title {
+            font-size: 2rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            margin-bottom: 10px;
+        }
+        .test-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin: 20px 0;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #FFD700;
+        }
+        .test-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .test-btn {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            border: none;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .test-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .test-btn.feedback {
+            background: linear-gradient(135deg, #FF9800, #F57C00);
+        }
+        .test-btn.instruction {
+            background: linear-gradient(135deg, #9C27B0, #7B1FA2);
+        }
+        .test-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .custom-input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 1rem;
+            margin-bottom: 10px;
+        }
+        .custom-input::placeholder {
+            color: rgba(255,255,255,0.7);
+        }
+        .voice-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .control-group {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .control-label {
+            font-weight: bold;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.3);
+            outline: none;
+            margin-bottom: 5px;
+        }
+        .status-display {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+            min-height: 100px;
+        }
+        .speech-text-display {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            z-index: 1000;
+            border: 2px solid #4CAF50;
+            animation: slideDown 0.3s ease-out;
+        }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .voice-list {
+            max-height: 150px;
+            overflow-y: auto;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .voice-item {
+            padding: 5px;
+            margin: 2px 0;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        .device-info {
+            background: rgba(255,193,7,0.2);
+            border: 1px solid rgba(255,193,7,0.5);
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+        .voice-select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 0.9rem;
+        }
+        .voice-select option {
+            background: #333;
+            color: white;
+        }
+        .code-display {
+            background: rgba(0,0,0,0.4);
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255,255,255,0.2);
+            white-space: pre-wrap;
+            overflow-x: auto;
+            color: #e6e6e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">🔊 AI Speech Test Harness</h1>
+            <p>Test and debug the conversational speech synthesis system</p>
+        </div>
+
+        <div class="test-card">
+            <div class="section-title">📱 Device Information</div>
+            <div class="device-info" id="deviceInfo">
+                Loading device information...
+            </div>
+        </div>
+
+        <div class="test-card">
+            <div class="section-title">🎮 Quick Tests</div>
+            <div class="test-buttons">
+                <button class="test-btn" onclick="testVoiceType('question')">🤖 Test Question</button>
+                <button class="test-btn feedback" onclick="testVoiceType('feedback')">✅ Test Feedback</button>
+                <button class="test-btn instruction" onclick="testVoiceType('instruction')">📋 Test Instruction</button>
+                <button class="test-btn" onclick="testLongText()">📖 Test Long Text</button>
+            </div>
+        </div>
+
+        <div class="test-card">
+            <div class="section-title">🎛️ Playback Controls</div>
+            <div class="test-buttons">
+                <button class="test-btn" onclick="pauseSpeech()">⏸️ Pause</button>
+                <button class="test-btn" onclick="resumeSpeech()">▶️ Resume</button>
+                <button class="test-btn" onclick="interruptSpeech()">🛑 Stop</button>
+                <button class="test-btn feedback" onclick="getSpeechStatus()">📊 Status</button>
+            </div>
+        </div>
+
+        <div class="test-card">
+            <div class="section-title">🎛️ Voice Controls</div>
+            <div class="voice-controls">
+                <div class="control-group">
+                    <label class="control-label">Voice Selection</label>
+                    <select class="voice-select" id="voiceSelect" onchange="updateVoiceSelection()">
+                        <option value="auto">Auto-select (Female English)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Voice Type</label>
+                    <select class="voice-select" id="voiceTypeSelect" onchange="updateSyntaxDisplay()">
+                        <option value="question">Question</option>
+                        <option value="feedback">Feedback</option>
+                        <option value="instruction">Instruction</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Rate: <span id="rateValue">0.9</span></label>
+                    <input type="range" class="slider" id="rateSlider" min="0.1" max="2.0" step="0.1" value="0.9" onchange="updateVoiceControl('rate', this.value)">
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Pitch: <span id="pitchValue">1.0</span></label>
+                    <input type="range" class="slider" id="pitchSlider" min="0.1" max="2.0" step="0.1" value="1.0" onchange="updateVoiceControl('pitch', this.value)">
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Volume: <span id="volumeValue">0.8</span></label>
+                    <input type="range" class="slider" id="volumeSlider" min="0.1" max="1.0" step="0.1" value="0.8" onchange="updateVoiceControl('volume', this.value)">
+                </div>
+            </div>
+        </div>
+
+        <div class="test-card">
+            <div class="section-title">💻 Generated Code Syntax</div>
+            <div class="code-display" id="codeDisplay">
+                // Code will be generated here...
+            </div>
+            <div class="test-buttons">
+                <button class="test-btn" onclick="copyCodeToClipboard()">📋 Copy Code</button>
+                <button class="test-btn feedback" onclick="testCurrentConfig()">🎯 Test Current Config</button>
+            </div>
+        </div>
+
+        <div class="test-card">
+            <div class="section-title">✏️ Custom Text</div>
+            <textarea class="custom-input" id="customText" placeholder="Enter custom text to speak..." rows="3">Hello! This is a test of the AI speech synthesis system. Can you hear me clearly?</textarea>
+            <div class="test-buttons">
+                <button class="test-btn" onclick="speakCustomText('question')">Speak as Question</button>
+                <button class="test-btn feedback" onclick="speakCustomText('feedback')">Speak as Feedback</button>
+                <button class="test-btn instruction" onclick="speakCustomText('instruction')">Speak as Instruction</button>
+            </div>
+        </div>
+
+        <div class="test-card">
+            <div class="section-title">📊 Status & Logs</div>
+            <div class="test-buttons">
+                <button class="test-btn" onclick="clearLogs()">🗑️ Clear Logs</button>
+            </div>
+            <div class="status-display" id="statusLog">
+                <div>Test harness loaded. Ready for speech testing.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SpeechTestHarness {
+            constructor() {
+                this.speechSynthesis = window.speechSynthesis;
+                this.currentUtterance = null;
+                this.lastUserInteraction = Date.now();
+                this.manuallyPaused = false; // Track pause state manually (browser is unreliable)
+
+                // Enhanced device detection
+                const ua = navigator.userAgent;
+                this.isIOS = (/iPad|iPhone|iPod/.test(ua) ||
+                           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) &&
+                           !ua.includes('Windows');
+
+                this.isWindows = ua.includes('Windows') || navigator.platform.includes('Win');
+                this.isMac = ua.includes('Mac') && !this.isWindows && !this.isIOS;
+
+                this.isChrome = /Chrome/.test(ua) || /CriOS/.test(ua); // CriOS = Chrome on iOS
+                this.isSafari = /Safari/.test(ua) && !this.isChrome;
+                this.isFirefox = /Firefox/.test(ua) || /FxiOS/.test(ua); // FxiOS = Firefox on iOS
+                this.isEdge = /Edg/.test(ua) || /EdgiOS/.test(ua); // EdgiOS = Edge on iOS
+
+                this.selectedVoice = null;
+
+                // Voice settings (can be modified by sliders)
+                this.voiceSettings = {
+                    rate: 0.9,
+                    pitch: 1.0,
+                    volume: 0.8
+                };
+
+                this.init();
+            }
+
+            async init() {
+                this.trackUserInteraction();
+                this.updateDeviceInfo();
+                this.loadVoices();
+                this.updateSyntaxDisplay();
+                this.log('Speech test harness initialized');
+
+                // Track user interactions for iOS
+                document.addEventListener('click', () => this.trackUserInteraction());
+                document.addEventListener('touchstart', () => this.trackUserInteraction());
+            }
+
+            trackUserInteraction() {
+                this.lastUserInteraction = Date.now();
+                this.log('User interaction tracked (important for iOS speech)');
+            }
+
+            updateDeviceInfo() {
+                const info = document.getElementById('deviceInfo');
+                const supportsSpeak = !!window.speechSynthesis;
+                const recentInteraction = Date.now() - this.lastUserInteraction < 5000;
+
+                // Device type
+                let deviceType = 'Desktop';
+                if (this.isWindows) {
+                    deviceType = 'Windows';
+                } else if (this.isMac) {
+                    deviceType = 'Mac';
+                } else if (this.isIOS) {
+                    deviceType = navigator.userAgent.includes('iPad') ? 'iPad' :
+                                navigator.userAgent.includes('iPhone') ? 'iPhone' : 'iOS';
+                }
+
+                // Browser type with comprehensive detection
+                let browserType = 'Other';
+                const ua = navigator.userAgent;
+
+                // Check for Chrome patterns
+                if (ua.includes('CriOS') ||
+                    ua.includes('Chrome') ||
+                    (this.isIOS && ua.includes('AppleWebKit') && !ua.includes('Safari/')) ||
+                    (this.isIOS && navigator.vendor === 'Google Inc.')) {
+                    browserType = 'Chrome';
+                }
+                // Check for Safari
+                else if (ua.includes('Safari') && !ua.includes('Chrome') && !ua.includes('CriOS')) {
+                    browserType = 'Safari';
+                }
+                // Check for Firefox
+                else if (ua.includes('Firefox') || ua.includes('FxiOS')) {
+                    browserType = 'Firefox';
+                }
+                // Check for Edge
+                else if (ua.includes('Edg') || ua.includes('EdgiOS')) {
+                    browserType = 'Edge';
+                }
+                // Fallback for iOS with desktop UA
+                else if (this.isIOS && ua.includes('AppleWebKit')) {
+                    browserType = 'Chrome (likely)';
+                }
+
+                info.innerHTML = `
+                    <strong>Device:</strong> ${deviceType} |
+                    <strong>Browser:</strong> ${browserType} |
+                    <strong>Speech Support:</strong> ${supportsSpeak ? '✅' : '❌'} |
+                    <strong>Recent Interaction:</strong> ${recentInteraction ? '✅' : '❌ (needed for iOS)'}<br>
+                    <small style="opacity: 0.7;">Vendor: ${navigator.vendor || 'Unknown'}</small><br>
+                    <small style="opacity: 0.7;">UA: ${ua.substring(0, 120)}...</small>
+                `;
+            }
+
+            loadVoices() {
+                const loadVoicesInternal = () => {
+                    const voices = this.speechSynthesis.getVoices();
+                    const voiceSelect = document.getElementById('voiceSelect');
+
+                    if (voices.length === 0) {
+                        return;
+                    }
+
+                    // Populate voice selection dropdown
+                    const currentValue = voiceSelect.value;
+                    voiceSelect.innerHTML = '<option value="auto">Auto-select (Female English)</option>';
+
+                    voices.forEach((voice, index) => {
+                        const option = document.createElement('option');
+                        option.value = index;
+                        option.textContent = `${voice.name} (${voice.lang})`;
+                        voiceSelect.appendChild(option);
+                    });
+
+                    // Restore selection if it was set
+                    if (currentValue !== 'auto') {
+                        voiceSelect.value = currentValue;
+                        this.updateVoiceSelection();
+                    }
+
+                    this.log(`Loaded ${voices.length} voices`);
+                    this.updateSyntaxDisplay();
+                };
+
+                loadVoicesInternal();
+                this.speechSynthesis.addEventListener('voiceschanged', loadVoicesInternal);
+            }
+
+            log(message) {
+                const timestamp = new Date().toLocaleTimeString();
+                const statusLog = document.getElementById('statusLog');
+                const logEntry = document.createElement('div');
+                logEntry.textContent = `[${timestamp}] ${message}`;
+                statusLog.appendChild(logEntry);
+                statusLog.scrollTop = statusLog.scrollHeight;
+                console.log(`[SpeechTest] ${message}`);
+            }
+
+            // COPIED SPEECH FUNCTIONS FROM CONVERSATIONAL GAME
+            async speakText(text, options = {}) {
+                const {
+                    voiceType = 'question',
+                    showVisualText = this.isIOS, // Only show visual text on iOS by default
+                    onComplete = null
+                } = options;
+
+                return new Promise((resolve) => {
+                    this.log(`🔊 Speaking (${voiceType}): ${text.substring(0, 50)}...`);
+
+                    if (showVisualText) {
+                        this.showSpeechText(text);
+                    }
+
+                    const canSpeak = !this.isIOS || (Date.now() - this.lastUserInteraction < 5000);
+
+                    if (canSpeak) {
+                        this.performSpeechSynthesis(text, voiceType, () => {
+                            this.hideSpeechText();
+                            if (onComplete) onComplete();
+                            this.log(`✅ Speech completed: ${voiceType}`);
+                            resolve();
+                        });
+                    } else {
+                        this.log(`⚠️ iOS speech blocked - no recent user interaction`);
+                        setTimeout(() => {
+                            this.hideSpeechText();
+                            if (onComplete) onComplete();
+                            resolve();
+                        }, 3000);
+                    }
+                });
+            }
+
+            performSpeechSynthesis(text, voiceType, onComplete) {
+                try {
+                    this.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+
+                    const voiceConfig = this.getVoiceConfig(voiceType);
+                    this.configureVoice(utterance, voiceConfig);
+
+                    utterance.onstart = () => {
+                        this.log(`▶️ Speech synthesis started`);
+                    };
+
+                    utterance.onend = () => {
+                        this.log(`🔊 Speech synthesis completed`);
+                        this.manuallyPaused = false; // Clear pause state
+                        if (onComplete) onComplete();
+                    };
+
+                    utterance.onerror = (error) => {
+                        this.log(`❌ Speech synthesis error: ${error.error}`);
+                        this.manuallyPaused = false; // Clear pause state
+                        if (onComplete) onComplete();
+                    };
+
+                    this.currentUtterance = utterance;
+                    this.speechSynthesis.speak(utterance);
+
+                    // Safety timeout
+                    setTimeout(() => {
+                        if (this.currentUtterance === utterance) {
+                            this.log(`⏰ Speech synthesis timeout`);
+                            if (onComplete) onComplete();
+                        }
+                    }, 10000);
+
+                } catch (error) {
+                    this.log(`❌ Speech synthesis failed: ${error.message}`);
+                    if (onComplete) onComplete();
+                }
+            }
+
+            getVoiceConfig(voiceType) {
+                const configs = {
+                    question: { rate: this.voiceSettings.rate, pitch: this.voiceSettings.pitch, volume: this.voiceSettings.volume },
+                    feedback: { rate: this.voiceSettings.rate * 1.1, pitch: this.voiceSettings.pitch * 1.1, volume: this.voiceSettings.volume * 1.1 },
+                    instruction: { rate: this.voiceSettings.rate * 0.9, pitch: this.voiceSettings.pitch * 0.9, volume: this.voiceSettings.volume }
+                };
+                return configs[voiceType] || configs.question;
+            }
+
+            configureVoice(utterance, config) {
+                const voices = this.speechSynthesis.getVoices();
+                let selectedVoice;
+
+                if (this.selectedVoice) {
+                    selectedVoice = this.selectedVoice;
+                } else {
+                    // Auto-select logic
+                    selectedVoice = voices.find(voice =>
+                        voice.lang.includes('en') && voice.name.includes('Female')
+                    ) || voices.find(voice => voice.lang.includes('en')) || voices[0];
+                }
+
+                if (selectedVoice) {
+                    utterance.voice = selectedVoice;
+                    this.log(`🎤 Using voice: ${selectedVoice.name}`);
+                }
+
+                utterance.rate = Math.max(0.1, Math.min(2.0, config.rate));
+                utterance.pitch = Math.max(0.1, Math.min(2.0, config.pitch));
+                utterance.volume = Math.max(0.1, Math.min(1.0, config.volume));
+
+                this.log(`🎛️ Voice config - Rate: ${utterance.rate}, Pitch: ${utterance.pitch}, Volume: ${utterance.volume}`);
+            }
+
+            updateVoiceSelection() {
+                const voiceSelect = document.getElementById('voiceSelect');
+                const voices = this.speechSynthesis.getVoices();
+
+                if (voiceSelect.value === 'auto') {
+                    this.selectedVoice = null;
+                    this.log('🎤 Voice selection: Auto-select');
+                } else {
+                    const voiceIndex = parseInt(voiceSelect.value);
+                    this.selectedVoice = voices[voiceIndex];
+                    this.log(`🎤 Voice selected: ${this.selectedVoice.name}`);
+                }
+
+                this.updateSyntaxDisplay();
+            }
+
+            updateSyntaxDisplay() {
+                const voiceTypeSelect = document.getElementById('voiceTypeSelect');
+                const voiceType = voiceTypeSelect ? voiceTypeSelect.value : 'question';
+                const config = this.getVoiceConfig(voiceType);
+                const voices = this.speechSynthesis.getVoices();
+
+                // Update sliders to show computed values for this voice type
+                this.updateSlidersForVoiceType(config);
+
+                let voiceInfo;
+                if (this.selectedVoice) {
+                    voiceInfo = `voices.find(v => v.name === "${this.selectedVoice.name}")`;
+                } else {
+                    voiceInfo = `voices.find(v => v.lang.includes('en') && v.name.includes('Female')) || voices.find(v => v.lang.includes('en')) || voices[0]`;
+                }
+
+                const code = `// Speech Synthesis Configuration
+const utterance = new SpeechSynthesisUtterance("Your text here");
+
+// Voice Selection
+const voices = speechSynthesis.getVoices();
+utterance.voice = ${voiceInfo};
+
+// Voice Type: ${voiceType}
+utterance.rate = ${config.rate};     // Speech rate (0.1 - 2.0)
+utterance.pitch = ${config.pitch};    // Voice pitch (0.1 - 2.0)
+utterance.volume = ${config.volume};   // Volume level (0.1 - 1.0)
+
+// Event handlers
+utterance.onstart = () => console.log('Speech started');
+utterance.onend = () => console.log('Speech completed');
+utterance.onerror = (e) => console.error('Speech error:', e);
+
+// Speak the text
+speechSynthesis.speak(utterance);
+
+// Playback Controls
+speechSynthesis.pause();    // Pause current speech
+speechSynthesis.resume();   // Resume paused speech
+speechSynthesis.cancel();   // Stop and clear speech queue
+
+// Check Status
+console.log('Speaking:', speechSynthesis.speaking);
+console.log('Paused:', speechSynthesis.paused);
+console.log('Pending:', speechSynthesis.pending);`;
+
+                document.getElementById('codeDisplay').textContent = code;
+            }
+
+            updateSlidersForVoiceType(config) {
+                // Update slider values
+                document.getElementById('rateSlider').value = config.rate;
+                document.getElementById('pitchSlider').value = config.pitch;
+                document.getElementById('volumeSlider').value = config.volume;
+
+                // Update displayed values
+                document.getElementById('rateValue').textContent = config.rate;
+                document.getElementById('pitchValue').textContent = config.pitch;
+                document.getElementById('volumeValue').textContent = config.volume;
+
+                this.log(`🎛️ Voice type sliders updated - Rate: ${config.rate}, Pitch: ${config.pitch}, Volume: ${config.volume}`);
+            }
+
+            showSpeechText(text) {
+                this.hideSpeechText();
+                const speechDisplay = document.createElement('div');
+                speechDisplay.id = 'speechTextDisplay';
+                speechDisplay.className = 'speech-text-display';
+                speechDisplay.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div>🤖 <strong>AI Speech:</strong> ${text}</div>
+                        <button onclick="testHarness.hideSpeechText()" style="background: rgba(255,255,255,0.2); border: none; color: white; border-radius: 5px; padding: 5px 10px; cursor: pointer; margin-left: 10px;">✕</button>
+                    </div>
+                `;
+                document.body.appendChild(speechDisplay);
+                this.log(`📱 Visual text displayed for iOS/Safari`);
+            }
+
+            hideSpeechText() {
+                const existing = document.getElementById('speechTextDisplay');
+                if (existing) {
+                    existing.remove();
+                    this.log(`📱 Visual text hidden`);
+                }
+            }
+
+            interrupt() {
+                if (this.speechSynthesis.speaking) {
+                    this.speechSynthesis.cancel();
+                    this.hideSpeechText();
+                    this.manuallyPaused = false; // Clear pause state
+                    this.log(`🛑 Speech stopped`);
+                } else {
+                    this.log(`ℹ️ No speech to stop`);
+                }
+            }
+
+            pause() {
+                if (this.speechSynthesis.speaking && !this.speechSynthesis.paused) {
+                    this.speechSynthesis.pause();
+                    this.log(`⏸️ Speech paused`);
+                } else if (this.speechSynthesis.paused) {
+                    this.log(`ℹ️ Speech already paused`);
+                } else {
+                    this.log(`ℹ️ No speech to pause`);
+                }
+            }
+
+            resume() {
+                if (this.speechSynthesis.paused) {
+                    this.speechSynthesis.resume();
+                    this.log(`▶️ Speech resumed`);
+                } else if (this.speechSynthesis.speaking) {
+                    this.log(`ℹ️ Speech already playing`);
+                } else {
+                    this.log(`ℹ️ No speech to resume`);
+                }
+            }
+
+            getStatus() {
+                const status = {
+                    speaking: this.speechSynthesis.speaking,
+                    paused: this.speechSynthesis.paused,
+                    pending: this.speechSynthesis.pending,
+                    manuallyPaused: this.manuallyPaused
+                };
+
+                let statusText = 'Speech Status: ';
+                if (this.manuallyPaused || (status.speaking && status.paused)) {
+                    statusText += 'PAUSED';
+                } else if (status.speaking) {
+                    statusText += 'SPEAKING';
+                } else if (status.pending) {
+                    statusText += 'PENDING';
+                } else {
+                    statusText += 'IDLE';
+                }
+
+                statusText += ` (Browser: speaking=${status.speaking}, paused=${status.paused}, manual=${status.manuallyPaused})`;
+                this.log(statusText);
+                return status;
+            }
+        }
+
+        // Test functions
+        let testHarness;
+
+        function initTestHarness() {
+            testHarness = new SpeechTestHarness();
+        }
+
+        function testVoiceType(voiceType) {
+            const testPhrases = {
+                question: "Here's your question: This person was the first President of the United States. Who am I describing?",
+                feedback: "Perfect! You said George Washington and that's exactly right! Great job!",
+                instruction: "Say 'next' when you're ready to continue to the next question."
+            };
+
+            const text = testPhrases[voiceType] || "This is a test message.";
+            testHarness.speakText(text, { voiceType: voiceType });
+        }
+
+        function testLongText() {
+            const longText = "This is a longer test to see how the speech synthesis handles extended content. It includes multiple sentences with various punctuation marks, numbers like 123 and 456, and should test the natural flow of the voice synthesis system. How does it sound?";
+            testHarness.speakText(longText, { voiceType: 'instruction' });
+        }
+
+        function speakCustomText(voiceType) {
+            const customText = document.getElementById('customText').value;
+            if (customText.trim()) {
+                testHarness.speakText(customText, { voiceType: voiceType });
+            } else {
+                testHarness.log('❌ No custom text entered');
+            }
+        }
+
+        function interruptSpeech() {
+            testHarness.interrupt();
+        }
+
+        function updateVoiceControl(property, value) {
+            testHarness.voiceSettings[property] = parseFloat(value);
+            document.getElementById(property + 'Value').textContent = value;
+            testHarness.log(`🎛️ ${property} updated to ${value}`);
+
+            // Update device info to refresh interaction status
+            testHarness.updateDeviceInfo();
+            // Update code syntax display
+            testHarness.updateSyntaxDisplay();
+        }
+
+        function updateVoiceSelection() {
+            testHarness.updateVoiceSelection();
+        }
+
+        function updateSyntaxDisplay() {
+            testHarness.updateSyntaxDisplay();
+        }
+
+        function copyCodeToClipboard() {
+            const codeText = document.getElementById('codeDisplay').textContent;
+            navigator.clipboard.writeText(codeText).then(() => {
+                testHarness.log('📋 Code copied to clipboard');
+            }).catch(() => {
+                testHarness.log('❌ Failed to copy code to clipboard');
+            });
+        }
+
+        function testCurrentConfig() {
+            const voiceType = document.getElementById('voiceTypeSelect').value;
+            const customText = document.getElementById('customText').value || "Testing current voice configuration with selected settings.";
+            testHarness.speakText(customText, { voiceType: voiceType });
+        }
+
+        function pauseSpeech() {
+            testHarness.pause();
+        }
+
+        function resumeSpeech() {
+            testHarness.resume();
+        }
+
+        function getSpeechStatus() {
+            testHarness.getStatus();
+        }
+
+        function clearLogs() {
+            const statusLog = document.getElementById('statusLog');
+            statusLog.innerHTML = '<div>Logs cleared.</div>';
+            testHarness.log('🗑️ Log history cleared');
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', initTestHarness);
+    </script>
+</body>
+</html>

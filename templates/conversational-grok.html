@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎙️ Conversational History Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            font-size: 2.5em;
+        }
+        .mode-toggle {
+            margin: 20px;
+        }
+        .mode-toggle a {
+            margin: 0 10px;
+            text-decoration: none;
+            color: #007bff;
+            font-weight: bold;
+        }
+        .mode-toggle a:hover {
+            text-decoration: underline;
+        }
+        #quiz-output {
+            margin-top: 20px;
+            font-size: 1.2em;
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-height: 100px;
+        }
+        #start-btn, #stop-btn, #calibrate-btn {
+            padding: 10px 20px;
+            font-size: 1em;
+            margin: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #28a745;
+            color: white;
+        }
+        #stop-btn {
+            display: none;
+            background-color: #dc3545;
+        }
+        #calibrate-btn {
+            display: none;
+            background-color: #17a2b8;
+        }
+        #start-btn:hover {
+            background-color: #218838;
+        }
+        #stop-btn:hover {
+            background-color: #c82333;
+        }
+        #calibrate-btn:hover {
+            background-color: #138496;
+        }
+        #recording-status {
+            font-size: 1em;
+            color: #333;
+            margin: 10px;
+        }
+        #volume-meter {
+            margin: 10px auto;
+            border: 1px solid #333;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎙️ Conversational History Game</h1>
+    <p>Speak naturally with your AI tutor about historical figures!</p>
+
+    <div class="mode-toggle">
+        <a href="/">Manual Mode</a> | <a href="/conversational">Conversational Mode</a>
+    </div>
+
+    <div>
+        <h3>🎤 Microphone Permission Required</h3>
+        <p>This conversational mode needs microphone access to hear your responses.</p>
+        <button id="start-btn">Grant Permission & Start</button>
+        <button id="stop-btn">Stop Recording</button>
+        <button id="calibrate-btn">Recalibrate Microphone</button>
+        <canvas id="volume-meter" width="200" height="50"></canvas>
+        <div id="recording-status"></div>
+    </div>
+
+    <div id="quiz-output"></div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioContext;
+        let analyser;
+        let stream;
+        let isRecording = false;
+        let vadConfig = null;
+        const volumeCanvas = document.getElementById('volume-meter');
+        const volumeCtx = volumeCanvas.getContext('2d');
+
+        // Initialize Web Speech API
+        const synth = window.speechSynthesis;
+        let voices = [];
+
+        function populateVoices() {
+            voices = synth.getVoices();
+            return voices.find(v => v.lang === 'en-US' && v.name.includes('Female')) || voices[0];
+        }
+
+        function speakText(text, voiceType = 'question') {
+            return new Promise(resolve => {
+                if (synth.speaking) {
+                    synth.cancel();
+                }
+                const utterance = new SpeechSynthesisUtterance(text);
+                const voice = populateVoices();
+                utterance.voice = voice;
+
+                const config = {
+                    question: { rate: 0.9, pitch: 1.0, volume: 0.8 },
+                    feedback: { rate: 1.0, pitch: 1.1, volume: 0.9 },
+                    encouragement: { rate: 1.1, pitch: 1.2, volume: 1.0 },
+                    instruction: { rate: 0.8, pitch: 0.9, volume: 0.9 }
+                }[voiceType] || { rate: 1.0, pitch: 1.0, volume: 1.0 };
+
+                utterance.rate = config.rate;
+                utterance.pitch = config.pitch;
+                utterance.volume = config.volume;
+
+                utterance.onend = () => {
+                    console.log('Speech synthesis ended');
+                    resolve();
+                    if (isRecording) startRecording(); // Resume recording after speech
+                };
+
+                synth.speak(utterance);
+            });
+        }
+
+        async function initAudio() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioContext = new AudioContext();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 512;
+                const source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+
+                mediaRecorder.ondataavailable = event => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = async () => {
+                    updateRecordingStatus('Processing answer...');
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const formData = new FormData();
+                    formData.append('audio', audioBlob);
+
+                    try {
+                        const response = await fetch('/api/conversation/submit-answer', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        const result = await response.json();
+                        console.log('Answer processed:', result);
+                        await updateUI(result);
+                    } catch (error) {
+                        console.error('Error submitting audio:', error);
+                        updateUI({ feedback: 'Error processing your answer. Please try again.' });
+                    }
+
+                    audioChunks = [];
+                    isRecording = false;
+                    document.getElementById('stop-btn').style.display = 'none';
+                    updateRecordingStatus('');
+                };
+
+                await calibrateVAD();
+                vadConfig = await fetchVADConfig();
+                monitorAudioLevels();
+                document.getElementById('calibrate-btn').style.display = 'inline-block';
+            } catch (error) {
+                console.error('Error initializing audio:', error);
+                alert('Please grant microphone permission to continue.');
+                updateUI({ feedback: 'Error: Microphone access denied.' });
+            }
+        }
+
+        async function fetchVADConfig() {
+            try {
+                const response = await fetch('/api/conversation/voice-activity-config');
+                const config = await response.json();
+                console.log('VAD config:', config);
+                return config.vad_config;
+            } catch (error) {
+                console.error('Error fetching VAD config:', error);
+                updateRecordingStatus('Using default VAD settings.');
+                return {
+                    sensitivity: 'medium',
+                    thresholds: { speech_threshold: 0.015, noise_threshold: 0.01 }, // Lowered threshold
+                    timing: { silence_duration_ms: 2000, min_speech_duration_ms: 200 },
+                    audio_analysis: { fft_size: 1024, sample_rate: 16000, analysis_interval_ms: 100 }
+                };
+            }
+        }
+
+        async function calibrateVAD() {
+            updateRecordingStatus('Calibrating microphone, please stay silent for 5 seconds...');
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            const levels = [];
+            for (let i = 0; i < 50; i++) {
+                analyser.getByteFrequencyData(dataArray);
+                const avg = dataArray.reduce((sum, val) => sum + val, 0) / bufferLength / 255;
+                levels.push(avg);
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            try {
+                await fetch('/api/calibrate-vad', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ambient_levels: levels })
+                });
+                console.log('VAD calibrated with baseline:', levels.reduce((sum, val) => sum + val, 0) / levels.length);
+                updateRecordingStatus('Calibration complete.');
+            } catch (error) {
+                console.error('Error calibrating VAD:', error);
+                updateRecordingStatus('Calibration failed, using default settings.');
+            }
+            setTimeout(() => updateRecordingStatus(''), 2000);
+        }
+
+        function monitorAudioLevels() {
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            let lastSpeechTime = null;
+            let speechStartTime = null;
+            let baselineLevel = 0;
+
+            function calculateBaseline() {
+                analyser.getByteFrequencyData(dataArray);
+                const avg = dataArray.reduce((sum, val) => sum + val, 0) / bufferLength / 255;
+                baselineLevel = (baselineLevel * 0.9) + (avg * 0.1);
+                if (!speechStartTime) setTimeout(calculateBaseline, 50);
+            }
+            setTimeout(calculateBaseline, 50);
+
+            function checkAudioLevel() {
+                if (!vadConfig || !isRecording) {
+                    setTimeout(checkAudioLevel, vadConfig?.audio_analysis.analysis_interval_ms || 100);
+                    return;
+                }
+
+                analyser.getByteFrequencyData(dataArray);
+                const avg = dataArray.reduce((sum, val) => sum + val, 0) / bufferLength / 255;
+
+                volumeCtx.clearRect(0, 0, volumeCanvas.width, volumeCanvas.height);
+                volumeCtx.fillStyle = avg >= (baselineLevel + 0.015) ? '#28a745' : '#ccc'; // Lowered to 0.015
+                volumeCtx.fillRect(0, 0, volumeCanvas.width * (avg * 2), volumeCanvas.height);
+
+                console.log(`Audio level: ${avg.toFixed(3)}, Baseline: ${baselineLevel.toFixed(3)}, Threshold: ${(baselineLevel + 0.015).toFixed(3)}`);
+
+                const dynamicThreshold = Math.max(vadConfig.thresholds.speech_threshold, baselineLevel + 0.015); // Lowered to 0.015
+                const isSpeech = avg >= dynamicThreshold;
+
+                if (isSpeech) {
+                    if (!speechStartTime) {
+                        speechStartTime = Date.now();
+                        console.log('Speech detected');
+                        updateRecordingStatus('Recording speech...');
+                    }
+                    lastSpeechTime = Date.now();
+                } else if (speechStartTime && lastSpeechTime) {
+                    const silenceDuration = Date.now() - lastSpeechTime;
+                    if (silenceDuration >= vadConfig.timing.silence_duration_ms) {
+                        console.log('Silence detected for 2 seconds, stopping recording');
+                        updateRecordingStatus('Silence detected, stopping...');
+                        stopRecording();
+                        return;
+                    }
+                }
+
+                if (speechStartTime && (Date.now() - speechStartTime) > 10000) {
+                    console.log('Max recording time reached, stopping');
+                    stopRecording();
+                    return;
+                }
+
+                setTimeout(checkAudioLevel, vadConfig.audio_analysis.analysis_interval_ms || 100);
+            }
+
+            checkAudioLevel();
+        }
+
+        function startRecording() {
+            if (!isRecording && mediaRecorder && mediaRecorder.state !== 'recording') {
+                audioChunks = [];
+                mediaRecorder.start();
+                isRecording = true;
+                document.getElementById('stop-btn').style.display = 'inline-block';
+                document.getElementById('start-btn').style.display = 'none';
+                console.log('Recording started');
+                updateRecordingStatus('Recording...');
+            }
+        }
+
+        function stopRecording() {
+            if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                isRecording = false;
+                console.log('Recording stopped');
+            }
+        }
+
+        function updateRecordingStatus(message) {
+            document.getElementById('recording-status').innerText = message;
+        }
+
+        async function updateUI(result) {
+            const output = document.getElementById('quiz-output');
+            output.innerText = result.feedback || result.transcription || 'Answer processed';
+            if (result.conversation_state === 'waiting_for_next') {
+                output.innerText += '\nSay "next" to continue.';
+            } else if (result.is_final_figure) {
+                output.innerText += `\nGame completed! Total score: ${result.total_score || 0}`;
+            }
+
+            // Play feedback if in speaking_feedback state
+            if (result.conversation_state === 'speaking_feedback' && result.feedback) {
+                await speakText(result.feedback, 'encouragement');
+            }
+        }
+
+        document.getElementById('start-btn').addEventListener('click', async () => {
+            await initAudio();
+            try {
+                const response = await fetch('/api/conversation/start', { method: 'POST' });
+                const data = await response.json();
+                console.log('Conversation started:', data);
+                if (data.conversation_state === 'speaking_question') {
+                    const figureName = data.figure_name || 'a historical figure';
+                    const questionText = `Who am I describing? The figure is ${figureName}.`;
+                    await speakText(questionText, 'question');
+                    updateUI({ feedback: `Listen to the description and say your answer: ${figureName}` });
+                }
+                // Mute microphone during synthesis to prevent feedback loop
+                if (stream) {
+                    stream.getAudioTracks().forEach(track => track.enabled = false);
+                    setTimeout(() => {
+                        if (stream) stream.getAudioTracks().forEach(track => track.enabled = true);
+                        startRecording();
+                    }, 3000); // Adjust delay to match speech duration
+                } else {
+                    startRecording();
+                }
+            } catch (error) {
+                console.error('Error starting conversation:', error);
+                updateUI({ feedback: 'Error starting game. Please try again or recalibrate.' });
+            }
+        });
+
+        document.getElementById('stop-btn').addEventListener('click', () => {
+            stopRecording();
+        });
+
+        document.getElementById('calibrate-btn').addEventListener('click', calibrateVAD);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('stop-btn').style.display = 'none';
+            document.getElementById('calibrate-btn').style.display = 'none';
+            volumeCtx.fillStyle = '#ccc';
+            volumeCtx.fillRect(0, 0, volumeCanvas.width, volumeCanvas.height);
+            synth.onvoiceschanged = populateVoices;
+        });
+    </script>
+</body>
+</html>
