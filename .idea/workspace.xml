@@ -4,11 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="7e2356e2-14a2-4715-b8f2-cb1ba5b1f771" name="Changes" comment="for Joe!">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/setup_windows.bat" beforeDir="false" afterPath="$PROJECT_DIR$/setup_windows.bat" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/templates/conversational.html" beforeDir="false" afterPath="$PROJECT_DIR$/templates/conversational.html" afterDir="false" />
-    </list>
+    <list default="true" id="7e2356e2-14a2-4715-b8f2-cb1ba5b1f771" name="Changes" comment="for Joe!" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -162,7 +158,7 @@
       <option name="presentableId" value="Default" />
       <updated>1749235054441</updated>
       <workItem from="1749235056303" duration="18340000" />
-      <workItem from="1749324261895" duration="55311000" />
+      <workItem from="1749324261895" duration="55635000" />
     </task>
     <task id="LOCAL-00001" summary="for Joe!">
       <option name="closed" value="true" />
@@ -172,7 +168,15 @@
       <option name="project" value="LOCAL" />
       <updated>1749671350377</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="for Joe!">
+      <option name="closed" value="true" />
+      <created>1749747199455</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1749747199455</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
