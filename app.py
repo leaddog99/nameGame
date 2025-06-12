@@ -3,7 +3,9 @@ from flask_cors import CORS
 import os
 import tempfile
 import json
-from datetime import datetime
+import time
+import threading
+from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 import logging
 from pydub import AudioSegment
@@ -11,6 +13,7 @@ import numpy as np
 import random
 import jellyfish
 import uuid
+from typing import Dict, Optional
 
 from data_models import (
     HISTORICAL_FIGURES,
@@ -55,9 +58,6 @@ app = Flask(__name__)
 CORS(app)
 app.secret_key = 'your-secret-key-change-this-in-production'
 
-user_sessions = {}
-user_conversations = {}
-
 validate_figure_data()
 logger.info(f"✅ Data validation passed! Loaded {len(HISTORICAL_FIGURES)} figures")
 
@@ -69,6 +69,7 @@ class GameSession:
         self.score = 0
         self.attempts = []
         self.start_time = datetime.now()
+        self.last_accessed = datetime.now()  # For session management
         self.hints_used = 0
         self.streak = 0
         self.setup_figures_for_mode()
@@ -91,6 +92,7 @@ class GameSession:
         random.shuffle(self.figures_order)
 
     def get_current_figure(self):
+        self.last_accessed = datetime.now()  # Update access time
         if self.current_figure_index < len(self.figures_order):
             if hasattr(self, 'selected_figures'):
                 return self.selected_figures[self.current_figure_index]
@@ -100,6 +102,7 @@ class GameSession:
 
     def advance_figure(self):
         self.current_figure_index += 1
+        self.last_accessed = datetime.now()
 
     def is_complete(self):
         return self.current_figure_index >= len(self.figures_order)
@@ -108,72 +111,321 @@ class GameSession:
         return get_game_mode_config(self.mode)
 
 
+class SessionManager:
+    """Enhanced session management with automatic cleanup and monitoring"""
+
+    def __init__(self, session_timeout_minutes=30, cleanup_interval_minutes=10):
+        self.user_sessions: Dict[str, GameSession] = {}
+        self.user_conversations: Dict[str, ConversationManager] = {}
+        self.session_metadata: Dict[str, dict] = {}
+        self.session_timeout = timedelta(minutes=session_timeout_minutes)
+        self.cleanup_interval = timedelta(minutes=cleanup_interval_minutes)
+
+        # Session statistics
+        self.total_sessions_created = 0
+        self.total_sessions_cleaned = 0
+
+        # Start background cleanup thread
+        self.cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
+        self.cleanup_thread.start()
+
+        # Optional: Load persistent sessions
+        self.load_sessions_from_disk()
+
+        logger.info(
+            f"🔧 SessionManager initialized - timeout: {session_timeout_minutes}min, cleanup: {cleanup_interval_minutes}min")
+
+    def get_or_create_session(self, user_id: str, mode: str = "classic") -> GameSession:
+        """Get existing session or create new one with metadata tracking"""
+        current_time = datetime.now()
+
+        if user_id not in self.user_sessions:
+            # Create new session
+            self.user_sessions[user_id] = GameSession(mode)
+            self.session_metadata[user_id] = {
+                'created_at': current_time,
+                'last_accessed': current_time,
+                'mode': mode,
+                'total_requests': 0,
+                'user_agent': request.headers.get('User-Agent', 'Unknown') if request else 'Unknown',
+                'ip_address': request.remote_addr if request else 'Unknown'
+            }
+            self.total_sessions_created += 1
+            logger.info(f"📱 Created new session for user: {user_id[:8]}... (mode: {mode})")
+
+        # Update access time and request count
+        self.session_metadata[user_id]['last_accessed'] = current_time
+        self.session_metadata[user_id]['total_requests'] += 1
+
+        return self.user_sessions[user_id]
+
+    def get_or_create_conversation(self, user_id: str) -> ConversationManager:
+        """Get existing conversation manager or create new one"""
+        if user_id not in self.user_conversations:
+            conversation_manager = ConversationManager()
+
+            # Setup callbacks
+            def on_next_requested():
+                logger.info(f"🎙️ CONVERSATION: User {user_id[:8]}... requested next figure")
+
+            def on_state_change(old_state, new_state):
+                logger.info(f"🎙️ CONVERSATION: State change {old_state.value} → {new_state.value}")
+
+            conversation_manager.on_next_requested = on_next_requested
+            conversation_manager.on_state_change = on_state_change
+            self.user_conversations[user_id] = conversation_manager
+            logger.info(f"🗣️ Created conversation manager for user: {user_id[:8]}...")
+
+        return self.user_conversations[user_id]
+
+    def cleanup_expired_sessions(self):
+        """Remove sessions that haven't been accessed recently"""
+        current_time = datetime.now()
+        expired_users = []
+
+        for user_id, metadata in self.session_metadata.items():
+            if current_time - metadata['last_accessed'] > self.session_timeout:
+                expired_users.append(user_id)
+
+        for user_id in expired_users:
+            self.remove_user_session(user_id)
+            self.total_sessions_cleaned += 1
+            logger.info(f"🧹 Cleaned up expired session for user: {user_id[:8]}...")
+
+        if expired_users:
+            logger.info(f"🗑️ Session cleanup: removed {len(expired_users)} expired sessions")
+
+    def remove_user_session(self, user_id: str):
+        """Safely remove all data for a user"""
+        # Stop conversation if active
+        if user_id in self.user_conversations:
+            try:
+                self.user_conversations[user_id].stop_conversation()
+            except Exception as e:
+                logger.warning(f"Error stopping conversation for {user_id[:8]}...: {e}")
+            del self.user_conversations[user_id]
+
+        # Remove game session
+        if user_id in self.user_sessions:
+            del self.user_sessions[user_id]
+
+        # Remove metadata
+        if user_id in self.session_metadata:
+            del self.session_metadata[user_id]
+
+    def get_session_stats(self) -> dict:
+        """Get comprehensive statistics about active sessions"""
+        current_time = datetime.now()
+        active_sessions = len(self.user_sessions)
+        recent_sessions = 0
+        mode_breakdown = {}
+
+        for user_id, metadata in self.session_metadata.items():
+            # Count recently active
+            if current_time - metadata['last_accessed'] < timedelta(minutes=5):
+                recent_sessions += 1
+
+            # Mode breakdown
+            mode = metadata.get('mode', 'unknown')
+            mode_breakdown[mode] = mode_breakdown.get(mode, 0) + 1
+
+        return {
+            'total_active_sessions': active_sessions,
+            'recently_active_sessions': recent_sessions,
+            'total_conversations': len(self.user_conversations),
+            'total_sessions_created': self.total_sessions_created,
+            'total_sessions_cleaned': self.total_sessions_cleaned,
+            'mode_breakdown': mode_breakdown,
+            'memory_usage_estimate': self._estimate_memory_usage(),
+            'session_timeout_minutes': self.session_timeout.total_seconds() / 60,
+            'uptime_hours': self._get_uptime_hours()
+        }
+
+    def get_detailed_session_info(self) -> list:
+        """Get detailed info about each session (admin use)"""
+        current_time = datetime.now()
+        sessions_info = []
+
+        for user_id, metadata in self.session_metadata.items():
+            session = self.user_sessions.get(user_id)
+            conversation = self.user_conversations.get(user_id)
+
+            last_accessed_minutes = (current_time - metadata['last_accessed']).total_seconds() / 60
+
+            sessions_info.append({
+                'user_id': user_id[:8] + '...',  # Truncated for privacy
+                'mode': metadata.get('mode', 'unknown'),
+                'created_at': metadata['created_at'].isoformat(),
+                'last_accessed_minutes_ago': round(last_accessed_minutes, 1),
+                'total_requests': metadata['total_requests'],
+                'game_progress': f"{session.current_figure_index}/{len(session.figures_order)}" if session else "No session",
+                'score': round(session.score) if session else 0,
+                'streak': session.streak if session else 0,
+                'has_conversation': conversation is not None,
+                'conversation_state': conversation.get_state().value if conversation else 'None'
+            })
+
+        # Sort by last accessed (most recent first)
+        sessions_info.sort(key=lambda x: x['last_accessed_minutes_ago'])
+        return sessions_info
+
+    def _estimate_memory_usage(self) -> str:
+        """Rough estimate of memory usage"""
+        sessions_size = len(self.user_sessions) * 2048  # ~2KB per session estimate
+        conversations_size = len(self.user_conversations) * 1024  # ~1KB per conversation
+        metadata_size = len(self.session_metadata) * 512  # ~512B per metadata
+        total_bytes = sessions_size + conversations_size + metadata_size
+
+        if total_bytes < 1024:
+            return f"{total_bytes} B"
+        elif total_bytes < 1024 * 1024:
+            return f"{total_bytes / 1024:.1f} KB"
+        else:
+            return f"{total_bytes / (1024 * 1024):.1f} MB"
+
+    def _get_uptime_hours(self) -> float:
+        """Calculate uptime since SessionManager was created"""
+        if hasattr(self, '_start_time'):
+            return (datetime.now() - self._start_time).total_seconds() / 3600
+        return 0
+
+    def _cleanup_loop(self):
+        """Background thread for periodic cleanup"""
+        self._start_time = datetime.now()
+
+        while True:
+            try:
+                time.sleep(self.cleanup_interval.total_seconds())
+                self.cleanup_expired_sessions()
+
+                # Optional: Save sessions every hour
+                if hasattr(self, '_last_save'):
+                    if datetime.now() - self._last_save > timedelta(hours=1):
+                        self.save_sessions_to_disk()
+                        self._last_save = datetime.now()
+                else:
+                    self._last_save = datetime.now()
+
+            except Exception as e:
+                logger.error(f"❌ Error in session cleanup: {e}")
+
+    def save_sessions_to_disk(self, filepath: str = "sessions_backup.json"):
+        """Optional: Save session data to disk for persistence"""
+        try:
+            backup_data = {
+                'sessions': {},
+                'metadata': {},
+                'timestamp': datetime.now().isoformat(),
+                'version': '1.0'
+            }
+
+            # Only save serializable session data
+            for user_id, session in self.user_sessions.items():
+                backup_data['sessions'][user_id] = {
+                    'mode': session.mode,
+                    'current_figure_index': session.current_figure_index,
+                    'score': session.score,
+                    'streak': session.streak,
+                    'hints_used': session.hints_used,
+                    'attempts': session.attempts[-5:],  # Only save last 5 attempts
+                    'start_time': session.start_time.isoformat(),
+                    'last_accessed': session.last_accessed.isoformat()
+                }
+
+            # Save metadata (without sensitive info)
+            for user_id, metadata in self.session_metadata.items():
+                backup_data['metadata'][user_id] = {
+                    'created_at': metadata['created_at'].isoformat(),
+                    'last_accessed': metadata['last_accessed'].isoformat(),
+                    'mode': metadata['mode'],
+                    'total_requests': metadata['total_requests']
+                }
+
+            with open(filepath, 'w') as f:
+                json.dump(backup_data, f, indent=2)
+
+            logger.info(f"💾 Saved {len(self.user_sessions)} sessions to {filepath}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save sessions: {e}")
+
+    def load_sessions_from_disk(self, filepath: str = "sessions_backup.json"):
+        """Optional: Load session data from disk"""
+        try:
+            if not os.path.exists(filepath):
+                return
+
+            with open(filepath, 'r') as f:
+                backup_data = json.load(f)
+
+            # Only load recent sessions (within last 2 hours)
+            backup_time = datetime.fromisoformat(backup_data['timestamp'])
+            if datetime.now() - backup_time > timedelta(hours=2):
+                logger.info("📁 Session backup too old, skipping load")
+                return
+
+            # Restore metadata only (sessions will be recreated on demand)
+            for user_id, metadata in backup_data.get('metadata', {}).items():
+                # Convert ISO strings back to datetime
+                metadata['created_at'] = datetime.fromisoformat(metadata['created_at'])
+                metadata['last_accessed'] = datetime.fromisoformat(metadata['last_accessed'])
+                # Add missing fields with defaults
+                metadata['user_agent'] = 'Restored'
+                metadata['ip_address'] = 'Restored'
+
+                self.session_metadata[user_id] = metadata
+
+            logger.info(f"📂 Loaded session metadata for {len(self.session_metadata)} users")
+
+        except Exception as e:
+            logger.error(f"❌ Failed to load sessions: {e}")
+
+
+# Initialize enhanced session manager
+session_manager = SessionManager(session_timeout_minutes=30, cleanup_interval_minutes=10)
+
+pronunciation_analyzer = PronunciationAnalyzer()
+
+
 def get_user_id():
     if 'user_id' not in session:
         session['user_id'] = str(uuid.uuid4())
-        logger.info(f"Created new user session: {session['user_id']}")
+        logger.info(f"🆔 Created new user session: {session['user_id'][:8]}...")
     return session['user_id']
 
 
 def get_user_game_session(mode="classic"):
     user_id = get_user_id()
-    if user_id not in user_sessions:
-        user_sessions[user_id] = GameSession(mode)
-        logger.info(f"Created new game session for user: {user_id}")
-    return user_sessions[user_id]
+    return session_manager.get_or_create_session(user_id, mode)
 
 
 def reset_user_game_session(mode="classic"):
     user_id = get_user_id()
-    logger.info(f"🔧 RESET DEBUG: === STARTING RESET FOR USER {user_id} ===")
+    logger.info(f"🔧 RESET DEBUG: === STARTING RESET FOR USER {user_id[:8]}... ===")
     logger.info(f"🔧 RESET DEBUG: Requested mode: {mode}")
-    logger.info(f"🔧 RESET DEBUG: Old session exists: {user_id in user_sessions}")
-    if user_id in user_sessions:
-        old_session = user_sessions[user_id]
-        logger.info(f"🔧 RESET DEBUG: Old session complete: {old_session.is_complete()}")
-        logger.info(f"🔧 RESET DEBUG: Old session figure index: {old_session.current_figure_index}")
-        del user_sessions[user_id]
-        logger.info(f"🔧 RESET DEBUG: Old session deleted")
-    if user_id in user_conversations:
-        user_conversations[user_id].stop_conversation()
-        del user_conversations[user_id]
-        logger.info(f"🔧 RESET DEBUG: Conversation manager reset")
-    user_sessions[user_id] = GameSession(mode)
-    new_session = user_sessions[user_id]
+
+    # Remove existing session
+    session_manager.remove_user_session(user_id)
+    logger.info(f"🔧 RESET DEBUG: Old session removed")
+
+    # Create new session
+    new_session = session_manager.get_or_create_session(user_id, mode)
     logger.info(f"🔧 RESET DEBUG: New session created")
     logger.info(f"🔧 RESET DEBUG: New session complete: {new_session.is_complete()}")
-    logger.info(f"🔧 RESET DEBUG: New session figure index: {new_session.current_figure_index}")
-    logger.info(f"🔧 RESET DEBUG: === RESET COMPLETE FOR USER {user_id} ===")
+    logger.info(f"🔧 RESET DEBUG: === RESET COMPLETE FOR USER {user_id[:8]}... ===")
     return new_session
 
 
 def get_user_conversation_manager():
     user_id = get_user_id()
-    if user_id not in user_conversations:
-        conversation_manager = ConversationManager()
-
-        def on_next_requested():
-            logger.info(f"🎙️ CONVERSATION: User {user_id} requested next figure")
-
-        def on_state_change(old_state, new_state):
-            logger.info(f"🎙️ CONVERSATION: State change {old_state.value} → {new_state.value}")
-
-        conversation_manager.on_next_requested = on_next_requested
-        conversation_manager.on_state_change = on_state_change
-        user_conversations[user_id] = conversation_manager
-        logger.info(f"Created conversation manager for user: {user_id}")
-    return user_conversations[user_id]
+    return session_manager.get_or_create_conversation(user_id)
 
 
 def reset_user_conversation():
     user_id = get_user_id()
-    if user_id in user_conversations:
-        user_conversations[user_id].stop_conversation()
-        del user_conversations[user_id]
-        logger.info(f"Reset conversation manager for user: {user_id}")
-
-
-pronunciation_analyzer = PronunciationAnalyzer()
+    if user_id in session_manager.user_conversations:
+        session_manager.user_conversations[user_id].stop_conversation()
+        del session_manager.user_conversations[user_id]
+        logger.info(f"🔄 Reset conversation manager for user: {user_id[:8]}...")
 
 
 @app.route('/')
@@ -189,7 +441,7 @@ def conversational_interface():
 @app.route('/api/game-state')
 def get_game_state():
     user_id = get_user_id()
-    logger.info(f"🔧 GAME STATE DEBUG: Getting state for user {user_id}")
+    logger.info(f"🔧 GAME STATE DEBUG: Getting state for user {user_id[:8]}...")
     game_session = get_user_game_session()
     figure = game_session.get_current_figure()
     logger.info(f"🔧 GAME STATE DEBUG: Session complete: {game_session.is_complete()}")
@@ -218,6 +470,57 @@ def get_game_state():
     })
 
 
+# New session management endpoints
+@app.route('/api/session-stats')
+def get_session_stats():
+    """Get session statistics for monitoring"""
+    stats = session_manager.get_session_stats()
+    return jsonify(stats)
+
+
+@app.route('/api/admin/session-details')
+def get_session_details():
+    """Get detailed session information (admin endpoint)"""
+    try:
+        detailed_info = session_manager.get_detailed_session_info()
+        return jsonify({
+            "sessions": detailed_info,
+            "summary": session_manager.get_session_stats()
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/cleanup-sessions', methods=['POST'])
+def force_cleanup_sessions():
+    """Force immediate session cleanup (admin endpoint)"""
+    try:
+        before_count = len(session_manager.user_sessions)
+        session_manager.cleanup_expired_sessions()
+        after_count = len(session_manager.user_sessions)
+        cleaned_count = before_count - after_count
+
+        return jsonify({
+            "message": "Session cleanup completed",
+            "sessions_before": before_count,
+            "sessions_after": after_count,
+            "sessions_cleaned": cleaned_count
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/admin/save-sessions', methods=['POST'])
+def save_sessions():
+    """Force save sessions to disk (admin endpoint)"""
+    try:
+        session_manager.save_sessions_to_disk()
+        return jsonify({"message": "Sessions saved successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# Keep all existing endpoints exactly the same
 @app.route('/api/submit-audio', methods=['POST'])
 def submit_audio():
     if 'audio' not in request.files:
@@ -405,7 +708,7 @@ def restart_game():
             data = {}
         mode = data.get('mode', 'classic')
         user_id = get_user_id()
-        logger.info(f"🔧 RESTART DEBUG: User {user_id} requesting restart with mode {mode}")
+        logger.info(f"🔧 RESTART DEBUG: User {user_id[:8]}... requesting restart with mode {mode}")
         game_session = reset_user_game_session(mode)
         current_figure = game_session.get_current_figure()
         logger.info(f"🔧 RESTART DEBUG: Current figure exists: {current_figure is not None}")
@@ -414,7 +717,7 @@ def restart_game():
             "mode": mode,
             "success": True,
             "debug_info": {
-                "user_id": user_id,
+                "user_id": user_id[:8] + '...',
                 "session_complete": game_session.is_complete(),
                 "current_figure_index": game_session.current_figure_index,
                 "total_figures": len(game_session.figures_order),
@@ -465,7 +768,7 @@ def get_stats():
         "current_mode": game_session.mode,
         "figures_completed": game_session.current_figure_index,
         "total_figures": len(game_session.figures_order),
-        "active_users": len(user_sessions)
+        "active_users": len(session_manager.user_sessions)
     }
     if game_session.attempts:
         accuracy_counts = {
@@ -476,9 +779,14 @@ def get_stats():
         }
         session_stats["accuracy_breakdown"] = accuracy_counts
         session_stats["average_score"] = game_session.score / len(game_session.attempts)
+
+    # Add session management stats
+    session_mgmt_stats = session_manager.get_session_stats()
+
     return jsonify({
         "whisper_stats": whisper_stats,
         "session_stats": session_stats,
+        "session_management": session_mgmt_stats,
         "game_modes": GAME_MODES,
         "cost_savings": {
             "api_calls_avoided": whisper_stats["total_transcriptions"],
@@ -493,6 +801,7 @@ def get_stats():
     })
 
 
+# Conversational endpoints remain the same
 @app.route('/api/conversation/start', methods=['POST'])
 def start_conversation():
     try:
@@ -789,12 +1098,16 @@ def calibrate_vad():
 
 
 if __name__ == '__main__':
-    logger.info(f"Starting server: Enhanced Historical Figures Name Game - Conversational Mode Ready!")
-    logger.info(f"Whisper Type f: {WHISPER_TYPE}")
-    logger.info("Total number of Figures Available: {len(HISTORICAL_FIGURES)}")
-    logger.info("🎤 Conversational mode AI features enabled!")
+    logger.info(f"🚀 Starting Enhanced Historical Figures Game Server!")
+    logger.info(f"🎤 Conversational mode AI features enabled!")
+    logger.info(f"🧠 Enhanced session management active!")
+    logger.info(f"🔍 Whisper Type: {WHISPER_TYPE}")
+    logger.info(f"📚 Total Figures Available: {len(HISTORICAL_FIGURES)}")
     logger.info("📝 Manual mode: http://localhost:5000/")
     logger.info("🗣️ Conversational mode: http://localhost:5000/conversational")
-    logger.info("No API costs - 100% local processing!")
+    logger.info("📊 Session stats: http://localhost:5000/api/session-stats")
+    logger.info("🔧 Admin panel: http://localhost:5000/api/admin/session-details")
+    logger.info("💰 No API costs - 100% local processing!")
+
     app.config['MAX_CONTENT_LENGTH'] = AUDIO_CONFIG["recording"]["max_file_size_mb"] * 1024 * 1024
     app.run(debug=True, host='0.0.0.0', port=5000)
