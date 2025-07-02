@@ -71,7 +71,8 @@ class GameSession:
         self.start_time = datetime.now()
         self.last_accessed = datetime.now()  # For session management
         self.hints_used = 0
-        self.streak = 0
+        self.streak = 0  # Current streak (resets on wrong answer)
+        self.max_streak = 0  # ✅ FIXED: Best streak achieved this session
         self.setup_figures_for_mode()
 
     def setup_figures_for_mode(self):
@@ -109,6 +110,20 @@ class GameSession:
 
     def get_mode_config(self):
         return get_game_mode_config(self.mode)
+
+    def update_streak(self, is_correct):
+        """✅ FIXED: Properly update both current streak and max streak"""
+        if is_correct:
+            self.streak += 1
+            # Update max streak if current streak is higher
+            if self.streak > self.max_streak:
+                self.max_streak = self.streak
+                logger.info(f"🔥 NEW BEST STREAK: {self.max_streak}")
+        else:
+            # Reset current streak but keep max_streak
+            if self.streak > 0:
+                logger.info(f"💔 Streak broken at {self.streak}, best remains {self.max_streak}")
+            self.streak = 0
 
 
 class SessionManager:
@@ -326,6 +341,7 @@ class SessionManager:
                     'current_figure_index': session.current_figure_index,
                     'score': session.score,
                     'streak': session.streak,
+                    'max_streak': session.max_streak,  # ✅ FIXED: Include max_streak in backup
                     'hints_used': session.hints_used,
                     'attempts': session.attempts[-5:],  # Only save last 5 attempts
                     'start_time': session.start_time.isoformat(),
@@ -464,6 +480,7 @@ def get_game_state():
         },
         "score": game_session.score,
         "streak": game_session.streak,
+        "max_streak": game_session.max_streak,  # ✅ FIXED: Include max_streak in game state
         "is_complete": game_session.is_complete(),
         "mode": game_session.mode,
         "hints_used": game_session.hints_used
@@ -520,7 +537,7 @@ def save_sessions():
         return jsonify({"error": str(e)}), 500
 
 
-# Keep all existing endpoints exactly the same
+# Keep all existing endpoints with streak fixes
 @app.route('/api/submit-audio', methods=['POST'])
 def submit_audio():
     if 'audio' not in request.files:
@@ -564,10 +581,11 @@ def submit_audio():
         }
         game_session.attempts.append(attempt)
         game_session.score += analysis["overall_score"]
-        if analysis["accuracy_score"] > 0:
-            game_session.streak += 1
-        else:
-            game_session.streak = 0
+
+        # ✅ FIXED: Use proper streak update method
+        is_correct = analysis["accuracy_score"] > 0
+        game_session.update_streak(is_correct)
+
         is_final_figure = (game_session.current_figure_index + 1) >= len(game_session.figures_order)
         logger.info(f"🔧 FINAL CARD DEBUG: Current index: {game_session.current_figure_index}")
         logger.info(f"🔧 FINAL CARD DEBUG: Total figures: {len(game_session.figures_order)}")
@@ -578,6 +596,7 @@ def submit_audio():
             "figure_name": figure["name"],
             "total_score": game_session.score,
             "streak": game_session.streak,
+            "max_streak": game_session.max_streak,  # ✅ FIXED: Include max_streak in response
             "attempt_number": len(game_session.attempts),
             "is_final_figure": is_final_figure
         }
@@ -590,7 +609,8 @@ def submit_audio():
                 "average_score": round(avg_score, 1),
                 "duration_seconds": round(game_duration),
                 "attempts": len(game_session.attempts),
-                "max_streak": game_session.streak,
+                "max_streak": game_session.max_streak,  # ✅ FIXED: Use max_streak instead of current streak
+                "current_streak": game_session.streak,  # ✅ BONUS: Also show current streak
                 "accuracy_breakdown": {
                     "exact": len([a for a in game_session.attempts if a["accuracy"] == "exact"]),
                     "close": len([a for a in game_session.attempts if a["accuracy"] == "close"]),
@@ -626,7 +646,8 @@ def complete_game():
         "average_score": round(avg_score, 1),
         "duration_seconds": round(game_duration),
         "attempts": len(game_session.attempts),
-        "max_streak": game_session.streak,
+        "max_streak": game_session.max_streak,  # ✅ FIXED: Use max_streak
+        "current_streak": game_session.streak,  # ✅ BONUS: Also show current
         "accuracy_breakdown": {
             "exact": len([a for a in game_session.attempts if a["accuracy"] == "exact"]),
             "close": len([a for a in game_session.attempts if a["accuracy"] == "close"]),
@@ -666,7 +687,10 @@ def handle_timeout():
         "time_to_record": TIMING_CONFIG["card_timeout_seconds"]
     }
     game_session.attempts.append(attempt)
-    game_session.streak = 0
+
+    # ✅ FIXED: Use proper streak update method instead of direct assignment
+    game_session.update_streak(False)  # Timeout counts as incorrect
+
     is_final_figure = (game_session.current_figure_index + 1) >= len(game_session.figures_order)
     response_data = {
         "transcription": "⏰ Time expired",
@@ -674,6 +698,7 @@ def handle_timeout():
         "figure_name": figure["name"],
         "total_score": game_session.score,
         "streak": game_session.streak,
+        "max_streak": game_session.max_streak,  # ✅ FIXED: Include max_streak
         "attempt_number": len(game_session.attempts),
         "timeout": True,
         "is_final_figure": is_final_figure
@@ -687,7 +712,8 @@ def handle_timeout():
             "average_score": round(avg_score, 1),
             "duration_seconds": round(game_duration),
             "attempts": len(game_session.attempts),
-            "max_streak": game_session.streak,
+            "max_streak": game_session.max_streak,  # ✅ FIXED: Use max_streak
+            "current_streak": game_session.streak,  # ✅ BONUS: Also show current
             "accuracy_breakdown": {
                 "exact": len([a for a in game_session.attempts if a["accuracy"] == "exact"]),
                 "close": len([a for a in game_session.attempts if a["accuracy"] == "close"]),
@@ -765,6 +791,7 @@ def get_stats():
         "current_session_attempts": len(game_session.attempts),
         "current_session_score": game_session.score,
         "current_streak": game_session.streak,
+        "max_streak": game_session.max_streak,  # ✅ FIXED: Include max_streak in stats
         "current_mode": game_session.mode,
         "figures_completed": game_session.current_figure_index,
         "total_figures": len(game_session.figures_order),
@@ -801,21 +828,31 @@ def get_stats():
     })
 
 
-# Conversational endpoints remain the same
+# Conversational endpoints with fixes
 @app.route('/api/conversation/start', methods=['POST'])
 def start_conversation():
     try:
         game_session = get_user_game_session()
+
+        # ✅ FIXED: Auto-restart if game is complete
+        auto_restarted = False
+        if game_session.is_complete():
+            logger.info("🔄 Game complete, auto-restarting for new conversation...")
+            game_session = reset_user_game_session('classic')
+            auto_restarted = True
+
         conversation_manager = get_user_conversation_manager()
         figure = game_session.get_current_figure()
         if not figure:
             return jsonify({"error": "No current figure available"}), 400
+
         conversation_manager.start_conversation(figure)
         return jsonify({
             "message": "Conversation started",
             "figure_name": figure["name"],
             "conversation_state": conversation_manager.get_state().value,
-            "speech_synthesis_ready": True
+            "speech_synthesis_ready": True,
+            "auto_restarted": auto_restarted  # ✅ Tell frontend we restarted
         })
     except Exception as e:
         logger.error(f"Error starting conversation: {e}")
@@ -1016,10 +1053,11 @@ def submit_conversational_answer():
         }
         game_session.attempts.append(attempt)
         game_session.score += analysis["overall_score"]
-        if analysis["accuracy_score"] > 0:
-            game_session.streak += 1
-        else:
-            game_session.streak = 0
+
+        # ✅ FIXED: Use proper streak update method
+        is_correct = analysis["accuracy_score"] > 0
+        game_session.update_streak(is_correct)
+
         is_final_figure = (game_session.current_figure_index + 1) >= len(game_session.figures_order)
         logger.info(f"🔧 FINAL CARD DEBUG: Current index: {game_session.current_figure_index}")
         logger.info(f"🔧 FINAL CARD DEBUG: Total figures: {len(game_session.figures_order)}")
@@ -1032,6 +1070,7 @@ def submit_conversational_answer():
             "figure_name": figure["name"],
             "total_score": game_session.score,
             "streak": game_session.streak,
+            "max_streak": game_session.max_streak,  # ✅ FIXED: Include max_streak
             "attempt_number": len(game_session.attempts),
             "is_final_figure": is_final_figure,
             "conversational_mode": True,
@@ -1046,7 +1085,8 @@ def submit_conversational_answer():
                 "average_score": round(avg_score, 1),
                 "duration_seconds": round(game_duration),
                 "attempts": len(game_session.attempts),
-                "max_streak": game_session.streak,
+                "max_streak": game_session.max_streak,  # ✅ FIXED: Use max_streak
+                "current_streak": game_session.streak,  # ✅ BONUS: Also show current
                 "accuracy_breakdown": {
                     "exact": len([a for a in game_session.attempts if a["accuracy"] == "exact"]),
                     "close": len([a for a in game_session.attempts if a["accuracy"] == "close"]),
@@ -1101,6 +1141,8 @@ if __name__ == '__main__':
     logger.info(f"🚀 Starting Enhanced Historical Figures Game Server!")
     logger.info(f"🎤 Conversational mode AI features enabled!")
     logger.info(f"🧠 Enhanced session management active!")
+    logger.info(f"🔥 Fixed streak tracking system!")
+    logger.info(f"🔄 Auto-restart for completed games!")
     logger.info(f"🔍 Whisper Type: {WHISPER_TYPE}")
     logger.info(f"📚 Total Figures Available: {len(HISTORICAL_FIGURES)}")
     logger.info("📝 Manual mode: http://localhost:5000/")

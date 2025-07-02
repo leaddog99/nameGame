@@ -406,30 +406,58 @@
             }
 
             async requestPermissions() {
-                try {
-                    console.log('🎤 Requesting microphone permission...');
-
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        audio: {
-                            echoCancellation: true,
-                            noiseSuppression: true,
-                            autoGainControl: true
-                        }
-                    });
-
-                    // Test successful - stop the stream
-                    stream.getTracks().forEach(track => track.stop());
-
-                    this.permissionsGranted = true;
-                    console.log('✅ Microphone permission granted');
-
-                    await this.startGame();
-
-                } catch (error) {
-                    console.error('❌ Microphone permission denied:', error);
-                    this.showError('Microphone permission is required for conversational mode. Please grant permission and try again.');
-                }
+        // 🩹 iOS speech unlock
+        const iOSPrewarm = () => {
+            try {
+                const utterance = new SpeechSynthesisUtterance("Let's begin.");
+                speechSynthesis.speak(utterance);
+            } catch (e) {
+                console.warn("iOS speech preload failed:", e);
             }
+        };
+        document.addEventListener('touchstart', iOSPrewarm, { once: true });
+        document.addEventListener('click', iOSPrewarm, { once: true });
+    try {
+        console.log('🎤 Requesting microphone permission...');
+
+        // 🩹 iOS Safari audio playback fix
+        document.addEventListener('touchstart', () => {
+            try {
+                const utterance = new SpeechSynthesisUtterance('');
+                speechSynthesis.speak(utterance);
+                speechSynthesis.cancel(); // Cancel dummy utterance
+            } catch (e) {
+                console.warn("iOS speechSynthesis preload failed:", e);
+            }
+
+            if (window.audioContext && window.audioContext.state === 'suspended') {
+                window.audioContext.resume().then(() => {
+                    console.log("✅ AudioContext resumed");
+                });
+            }
+        }, { once: true });
+
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            }
+        });
+
+        stream.getTracks().forEach(track => track.stop());
+
+        this.permissionsGranted = true;
+        console.log('✅ Microphone permission granted');
+
+        await this.startGame();
+
+    } catch (error) {
+        console.error('❌ Microphone permission denied:', error);
+        this.showError('Microphone permission is required for conversational mode. Please grant permission and try again.');
+    }
+}
+
 
             async startGame() {
                 try {

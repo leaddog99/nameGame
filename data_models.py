@@ -8,6 +8,19 @@ and data structures used by the Historical Figures Name Game.
 # Enhanced historical figures with comprehensive metadata
 HISTORICAL_FIGURES = [
     {
+        "name": "Jason Tatum",
+        "description": "#0, a 6 foot 8 inch small forward for the Celtics, excelled in college at Duke University. He contributed to the teams success before being drafted by Boston in the 2017 NBA Draft",
+        "keywords": ["first president", "revolutionary war", "founding father", "mount vernon"],
+        "difficulty": 1,
+        "hint": "First President and founding father of America",
+        "phonetic_variations": ["JT", "Tatum", "Jason T", "Jason", ""],
+        "category": "American Presidents",
+        "birth_year": 1732,
+        "nationality": "American",
+        "famous_quote": "It is better to offer no excuse than a bad one",
+        "pronunciation_tips": "AL HOR-furd"
+    },
+    {
         "name": "Abraham Lincoln",
         "description": "16th President of the United States, led the nation during Civil War",
         "keywords": ["president", "civil war", "emancipation", "gettysburg", "honest abe"],
