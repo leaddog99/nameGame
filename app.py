@@ -1032,6 +1032,7 @@ def submit_conversational_answer():
             logger.info(f"Audio conversion skipped, using original file: {e}")
             analysis_file_path = temp_file_path
 
+
         # COPY EXACT ANALYSIS FROM WORKING MANUAL MODE
         analysis = pronunciation_analyzer.analyze_pronunciation(analysis_file_path, figure)
         if time_to_record is not None:
