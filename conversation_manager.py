@@ -292,6 +292,7 @@ class ConversationManager:
             question_text = self._create_question_text(self.current_figure)
             self.synthesizer.speak_question(question_text)
 
+
     def _handle_hint_command(self) -> None:
         """Handle 'hint' voice command"""
         if self.current_figure:
